@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "TitleBar.h"
+#include "render/BoardCanvas.h"
 
 #include <QApplication>
 #include <QHoverEvent>
@@ -25,13 +26,13 @@ MainWindow::MainWindow(QWidget *parent)
     setMenuWidget(m_titleBar);
     connect(this, &QWidget::windowTitleChanged, m_titleBar, &TitleBar::setTitle);
 
-    // Body: por enquanto vazio. O layout sem margens já está pronto para
-    // receber a lousa (BoardCanvas) nas próximas etapas.
+    // Body: ocupado inteiro pela lousa
     m_body = new QWidget(this);
     m_body->setObjectName("Body");
     auto *bodyLayout = new QVBoxLayout(m_body);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
     bodyLayout->setSpacing(0);
+    bodyLayout->addWidget(new BoardCanvas(m_body));
     setCentralWidget(m_body);
 
     setWindowTitle("Professor - Meu App");
@@ -48,7 +49,7 @@ bool MainWindow::event(QEvent *event)
         updateCursorShape(edgesAt(static_cast<QHoverEvent *>(event)->position().toPoint()));
         break;
     case QEvent::HoverLeave:
-        unsetCursor();
+        updateCursorShape({});
         break;
     default:
         break;
@@ -78,7 +79,7 @@ void MainWindow::changeEvent(QEvent *event)
     // Mantém o ícone maximizar/restaurar sincronizado com o estado da janela
     if (event->type() == QEvent::WindowStateChange && m_titleBar) {
         m_titleBar->setMaximized(isMaximized());
-        unsetCursor();
+        updateCursorShape({});
     }
     QMainWindow::changeEvent(event);
 }
@@ -106,6 +107,11 @@ Qt::Edges MainWindow::edgesAt(const QPoint &pos) const
 
 void MainWindow::updateCursorShape(Qt::Edges edges)
 {
+    // Evita trocar o cursor do sistema a cada movimento do mouse
+    if (edges == m_cursorEdges)
+        return;
+    m_cursorEdges = edges;
+
     if (edges == (Qt::LeftEdge | Qt::TopEdge) || edges == (Qt::RightEdge | Qt::BottomEdge))
         setCursor(Qt::SizeFDiagCursor);
     else if (edges == (Qt::RightEdge | Qt::TopEdge) || edges == (Qt::LeftEdge | Qt::BottomEdge))

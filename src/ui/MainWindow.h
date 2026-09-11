@@ -12,7 +12,7 @@ struct MainWindowParams {
     int resizeMargin = 5; // largura (px) da faixa junto às bordas que permite redimensionar
 };
 
-// Janela principal sem moldura nativa: TitleBar customizada + body.
+// Janela principal sem moldura nativa: TitleBar customizada + body com a lousa.
 // O redimensionamento pelas bordas é feito com QWindow::startSystemResize.
 class MainWindow : public QMainWindow
 {
@@ -34,4 +34,5 @@ private:
     MainWindowParams m_params;
     TitleBar *m_titleBar = nullptr;
     QWidget *m_body = nullptr;
+    Qt::Edges m_cursorEdges; // bordas refletidas no cursor atual
 };

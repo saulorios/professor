@@ -29,7 +29,8 @@ src/scene/     → layout (posições relativas, âncoras, ids), geometria 2D,
 src/hand/      → "mão do professor": converte polilinhas e texto (fontes Hershey)
                  em traços temporizados (posição, pressão, tempo)
    ▼
-src/physics/   → física do giz: BoardSurface, ChalkStick, DepositBuffer, Eraser
+src/physics/   → física do giz: BoardSurface, ChalkStick, DepositBuffer,
+                 StrokeEngine, Eraser
    ▼
 src/render/    → BoardCanvas: desenha o DepositBuffer na tela
 src/ui/        → MainWindow, TitleBar e demais widgets de interface
@@ -39,6 +40,7 @@ src/ui/        → MainWindow, TitleBar e demais widgets de interface
 
 - Cada camada só conhece a camada imediatamente abaixo dela.
 - `physics/` é C++ puro (sem QWidget; tipos Qt básicos como QPointF são permitidos).
+  No CMake ela é a biblioteca estática `physics`, que só enxerga o QtCore.
 - A física recebe SEMPRE o mesmo tipo de entrada, venha do mouse, da mesa
   digitalizadora ou da mão virtual:
 
@@ -63,6 +65,33 @@ struct ChalkSample {
   superior esquerdo, Y para baixo.
 - Toda a IA e a camada `scene/` trabalham em unidades da lousa.
 - A conversão unidades → pixels acontece apenas na fronteira `hand/` → `physics/`.
+- A lousa em pixels mede **1920 × 1080** (12 px por unidade), definida em
+  `PhysicsParams`. A `BoardCanvas` exibe essa imagem em 16:9, escalada e
+  centralizada no body; o resto do body fica com a cor da UI.
+
+## Física do giz (`src/physics/`)
+
+- `PhysicsParams`: todas as constantes ajustáveis da física (lousa, superfície,
+  giz, traço, apagador). `BoardCanvasParams` (em `render/`) guarda as da tela:
+  pressão do mouse (0.6), faixa de inclinação da caneta e cores.
+- `BoardSurface`: height map 0..1 com value noise em 2 oitavas (grão de ~2 px +
+  ondulação de ~40 px), seed fixa e curva `surfaceGamma`.
+- `StrokeEngine`: velocidade suavizada; sub-passos a cada 0.5 px (interpolando
+  posição, pressão e tilt); depósito por pixel sob a ponta:
+  `contato = pressão − altura`; `qtd = contato · 1/(1 + v·kVelocity) · eficiência ·
+  (0.7 + 0.3·ruído)`; `depósito += qtd · (1 − depósito)`. O ruído é um hash da
+  posição (`Noise.h`), nunca `rand()`.
+- `ChalkStick`: ponta de 3 px que cresce levemente com o desgaste (limite 4.5 px);
+  o tilt a transforma numa elipse alongada na direção do traço. `reset()` volta
+  ao giz novo.
+- `Eraser`: raio de 20 px; remove 85% do depósito **uma vez por passada** e
+  espalha parte do resto para os vizinhos (fantasma). Uma nova passada começa a
+  cada toque e quando o apagador inverte o sentido (vai e volta).
+- `DepositBuffer`: `std::vector<float>` por pixel com dirty rect; a `BoardCanvas`
+  recalcula e redesenha só essa região a cada evento.
+
+Controles na lousa: botão esquerdo (ou ponta da caneta) = giz; botão direito =
+apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes).
 
 ## Paleta
 
@@ -89,6 +118,8 @@ cmake --build build -j
 ./build/lousa
 ```
 
+Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
+
 ## Arquivos de referência
 
 - `docs/ia-protocol.md` — system prompt da IA professora e especificação completa
@@ -99,7 +130,7 @@ cmake --build build -j
 ## Estado atual
 
 - [x] Etapa 0 — Janela com TitleBar customizada
-- [ ] Etapa 1 — Física do giz com mouse
+- [x] Etapa 1 — Física do giz com mouse
 - [ ] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
 - [ ] Etapa 3 — Texto com fontes Hershey
 - [ ] Etapa 4 — Motor de layout
