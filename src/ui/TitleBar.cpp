@@ -8,22 +8,16 @@
 #include <QPainter>
 #include <QWindow>
 
-namespace {
-constexpr int kTitleBarHeight = 35;   // altura útil da topbar
-constexpr int kSeparatorHeight = 1;   // linha separadora (border-bottom no QSS)
-constexpr int kButtonWidth = 46;
-constexpr int kIconSize = 10;         // lado dos ícones dos botões
-}
-
 // ---------------------------------------------------------------------------
 // TitleBarButton
 // ---------------------------------------------------------------------------
 
-TitleBarButton::TitleBarButton(Kind kind, QWidget *parent)
+TitleBarButton::TitleBarButton(Kind kind, const TitleBarParams &params, QWidget *parent)
     : QPushButton(parent)
     , m_kind(kind)
+    , m_iconSize(params.iconSize)
 {
-    setFixedSize(kButtonWidth, kTitleBarHeight);
+    setFixedSize(params.buttonWidth, params.height);
     setFocusPolicy(Qt::NoFocus);
 }
 
@@ -59,7 +53,7 @@ void TitleBarButton::paintEvent(QPaintEvent *event)
     painter.setBrush(Qt::NoBrush);
 
     // Área do ícone, centralizada no botão
-    const int s = kIconSize;
+    const int s = m_iconSize;
     const int x = (width() - s) / 2;
     const int y = (height() - s) / 2;
 
@@ -72,15 +66,17 @@ void TitleBarButton::paintEvent(QPaintEvent *event)
         painter.drawRect(x, y, s - 1, s - 1);
         break;
 
-    case Kind::Restore:
+    case Kind::Restore: {
+        const int d = 2; // deslocamento da janela de trás
         // Janela da frente
-        painter.drawRect(x, y + 2, s - 3, s - 3);
+        painter.drawRect(x, y + d, s - 1 - d, s - 1 - d);
         // Janela de trás (apenas as partes não cobertas pela da frente)
-        painter.drawLine(x + 2, y, x + s - 1, y);
-        painter.drawLine(x + s - 1, y, x + s - 1, y + s - 3);
-        painter.drawLine(x + 2, y, x + 2, y + 1);
-        painter.drawLine(x + s - 2, y + s - 3, x + s - 1, y + s - 3);
+        painter.drawLine(x + d, y, x + s - 1, y);
+        painter.drawLine(x + s - 1, y, x + s - 1, y + s - 1 - d);
+        painter.drawLine(x + d, y, x + d, y + d - 1);
+        painter.drawLine(x + s - d, y + s - 1 - d, x + s - 1, y + s - 1 - d);
         break;
+    }
 
     case Kind::Close:
         painter.setRenderHint(QPainter::Antialiasing);
@@ -99,12 +95,12 @@ TitleBar::TitleBar(QWidget *parent)
 {
     // Necessário para que o QSS (fundo e borda) seja aplicado a uma subclasse de QWidget
     setAttribute(Qt::WA_StyledBackground);
-    setFixedHeight(kTitleBarHeight + kSeparatorHeight);
+    setFixedHeight(m_params.height + m_params.separatorHeight);
 
-    // Logo: placeholder 16x16 estilizado no QSS
+    // Logo: placeholder estilizado no QSS
     m_logo = new QLabel(this);
     m_logo->setObjectName("Logo");
-    m_logo->setFixedSize(16, 16);
+    m_logo->setFixedSize(m_params.logoSize, m_params.logoSize);
     m_logo->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     // Menu embutido na topbar
@@ -123,9 +119,9 @@ TitleBar::TitleBar(QWidget *parent)
     m_titleLabel->setAttribute(Qt::WA_TransparentForMouseEvents);
 
     // Botões de controle da janela
-    m_minimizeButton = new TitleBarButton(TitleBarButton::Kind::Minimize, this);
-    m_maximizeButton = new TitleBarButton(TitleBarButton::Kind::Maximize, this);
-    m_closeButton = new TitleBarButton(TitleBarButton::Kind::Close, this);
+    m_minimizeButton = new TitleBarButton(TitleBarButton::Kind::Minimize, m_params, this);
+    m_maximizeButton = new TitleBarButton(TitleBarButton::Kind::Maximize, m_params, this);
+    m_closeButton = new TitleBarButton(TitleBarButton::Kind::Close, m_params, this);
     m_closeButton->setObjectName("CloseButton");
 
     connect(m_minimizeButton, &QPushButton::clicked, this, [this] { window()->showMinimized(); });
@@ -134,10 +130,10 @@ TitleBar::TitleBar(QWidget *parent)
 
     auto *layout = new QHBoxLayout(this);
     // Margem inferior reservada para a linha separadora desenhada pelo QSS
-    layout->setContentsMargins(10, 0, 0, kSeparatorHeight);
+    layout->setContentsMargins(m_params.leftMargin, 0, 0, m_params.separatorHeight);
     layout->setSpacing(0);
     layout->addWidget(m_logo, 0, Qt::AlignVCenter);
-    layout->addSpacing(6);
+    layout->addSpacing(m_params.logoSpacing);
     layout->addWidget(m_menuBar, 0, Qt::AlignVCenter);
     layout->addStretch(1);
     layout->addWidget(m_minimizeButton);
@@ -219,5 +215,5 @@ void TitleBar::updateTitleGeometry()
 
     // Centraliza em relação à janela, mas sem invadir o menu nem os botões
     const int x = qBound(minX, (width() - textWidth) / 2, maxX - textWidth);
-    m_titleLabel->setGeometry(x, 0, textWidth, kTitleBarHeight);
+    m_titleLabel->setGeometry(x, 0, textWidth, m_params.height);
 }

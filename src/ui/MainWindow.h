@@ -1,10 +1,18 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QSize>
 
 class TitleBar;
 
-// Janela principal sem moldura nativa: topbar customizada + body.
+// Parâmetros ajustáveis da janela principal
+struct MainWindowParams {
+    QSize initialSize{1280, 800};
+    QSize minimumSize{800, 500};
+    int resizeMargin = 5; // largura (px) da faixa junto às bordas que permite redimensionar
+};
+
+// Janela principal sem moldura nativa: TitleBar customizada + body.
 // O redimensionamento pelas bordas é feito com QWindow::startSystemResize.
 class MainWindow : public QMainWindow
 {
@@ -23,6 +31,7 @@ private:
     Qt::Edges edgesAt(const QPoint &pos) const;
     void updateCursorShape(Qt::Edges edges);
 
+    MainWindowParams m_params;
     TitleBar *m_titleBar = nullptr;
     QWidget *m_body = nullptr;
 };

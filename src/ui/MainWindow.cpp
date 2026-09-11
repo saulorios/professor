@@ -2,15 +2,10 @@
 #include "TitleBar.h"
 
 #include <QApplication>
-#include <QHBoxLayout>
 #include <QHoverEvent>
 #include <QMouseEvent>
+#include <QVBoxLayout>
 #include <QWindow>
-
-namespace {
-// Largura (em px) da faixa junto às bordas que permite redimensionar
-constexpr int kResizeMargin = 5;
-}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -22,19 +17,19 @@ MainWindow::MainWindow(QWidget *parent)
     // usados para trocar o cursor perto das bordas
     setAttribute(Qt::WA_Hover);
 
-    resize(1280, 800);
-    setMinimumSize(800, 500);
+    resize(m_params.initialSize);
+    setMinimumSize(m_params.minimumSize);
 
-    // Topbar customizada, ocupando o lugar do menu da QMainWindow
+    // TitleBar customizada, ocupando o lugar do menu da QMainWindow
     m_titleBar = new TitleBar(this);
     setMenuWidget(m_titleBar);
     connect(this, &QWidget::windowTitleChanged, m_titleBar, &TitleBar::setTitle);
 
-    // Body: por enquanto vazio. O layout horizontal já está pronto para
-    // receber, no futuro, uma sidebar à esquerda e o editor central.
+    // Body: por enquanto vazio. O layout sem margens já está pronto para
+    // receber a lousa (BoardCanvas) nas próximas etapas.
     m_body = new QWidget(this);
     m_body->setObjectName("Body");
-    auto *bodyLayout = new QHBoxLayout(m_body);
+    auto *bodyLayout = new QVBoxLayout(m_body);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
     bodyLayout->setSpacing(0);
     setCentralWidget(m_body);
@@ -70,10 +65,9 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 
         if (widget->window() == this && mouseEvent->button() == Qt::LeftButton) {
             const Qt::Edges edges = edgesAt(mapFromGlobal(mouseEvent->globalPosition().toPoint()));
-            if (edges && windowHandle()) {
-                windowHandle()->startSystemResize(edges);
+            // Só consome o clique se o sistema realmente iniciou o redimensionamento
+            if (edges && windowHandle() && windowHandle()->startSystemResize(edges))
                 return true;
-            }
         }
     }
     return QMainWindow::eventFilter(watched, event);
@@ -97,13 +91,14 @@ Qt::Edges MainWindow::edgesAt(const QPoint &pos) const
     if (isMaximized() || isFullScreen())
         return edges;
 
-    if (pos.x() < kResizeMargin)
+    const int margin = m_params.resizeMargin;
+    if (pos.x() < margin)
         edges |= Qt::LeftEdge;
-    if (pos.x() >= width() - kResizeMargin)
+    if (pos.x() >= width() - margin)
         edges |= Qt::RightEdge;
-    if (pos.y() < kResizeMargin)
+    if (pos.y() < margin)
         edges |= Qt::TopEdge;
-    if (pos.y() >= height() - kResizeMargin)
+    if (pos.y() >= height() - margin)
         edges |= Qt::BottomEdge;
 
     return edges;

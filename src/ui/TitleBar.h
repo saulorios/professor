@@ -8,6 +8,17 @@
 class QLabel;
 class QMenuBar;
 
+// Parâmetros ajustáveis da TitleBar (em pixels)
+struct TitleBarParams {
+    int height = 35;          // altura útil da topbar
+    int separatorHeight = 1;  // linha separadora (border-bottom no QSS)
+    int buttonWidth = 46;     // botões minimizar / maximizar / fechar
+    int iconSize = 10;        // lado dos ícones dos botões
+    int logoSize = 16;
+    int leftMargin = 10;      // espaço antes do logo
+    int logoSpacing = 6;      // espaço entre o logo e o menu
+};
+
 // Botão de controle da janela (minimizar, maximizar/restaurar, fechar).
 // O fundo vem do QSS; o ícone é desenhado com QPainter e suas cores também
 // são definidas no QSS (qproperty-iconColor / qproperty-iconHoverColor).
@@ -20,7 +31,7 @@ class TitleBarButton : public QPushButton
 public:
     enum class Kind { Minimize, Maximize, Restore, Close };
 
-    explicit TitleBarButton(Kind kind, QWidget *parent = nullptr);
+    TitleBarButton(Kind kind, const TitleBarParams &params, QWidget *parent = nullptr);
 
     void setKind(Kind kind);
 
@@ -35,6 +46,7 @@ protected:
 
 private:
     Kind m_kind;
+    int m_iconSize;
     QColor m_iconColor = QColor(0xCC, 0xCC, 0xCC);
     QColor m_iconHoverColor = QColor(0xCC, 0xCC, 0xCC);
 };
@@ -63,6 +75,8 @@ protected:
 private:
     void toggleMaximize();
     void updateTitleGeometry();
+
+    TitleBarParams m_params;
 
     QLabel *m_logo = nullptr;
     QMenuBar *m_menuBar = nullptr;

@@ -98,7 +98,7 @@ cmake --build build -j
 
 ## Estado atual
 
-- [ ] Etapa 0 — Janela com TitleBar customizada
+- [x] Etapa 0 — Janela com TitleBar customizada
 - [ ] Etapa 1 — Física do giz com mouse
 - [ ] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
 - [ ] Etapa 3 — Texto com fontes Hershey
