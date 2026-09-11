@@ -12,7 +12,8 @@ Mouse, mesa digitalizadora e IA alimentam exatamente o mesmo pipeline de física
 ## Stack
 
 - C++17, Qt 6 (Widgets; OpenGL apenas em etapa futura), CMake.
-- Sistema alvo principal: Linux (Ubuntu). Deve compilar também em Windows.
+- Sistema alvo principal: Linux (Ubuntu). Deve compilar também em Windows
+  (os fontes são UTF-8; no MSVC o CMake passa `/utf-8`).
 - Sem dependências externas além do Qt, salvo quando explicitamente pedido.
 
 ## Arquitetura (5 camadas, uma pasta por camada)
@@ -24,9 +25,9 @@ IA (via proxy que guarda a API key)
 src/protocol/  → parser incremental de JSON Lines, validação, fila de comandos
    ▼
 src/scene/     → layout (posições relativas, âncoras, ids), geometria 2D,
-                 objetos 3D, projeção e remoção de arestas ocultas
+                 texto (fontes Hershey), objetos 3D, projeção e arestas ocultas
    ▼
-src/hand/      → "mão do professor": converte polilinhas e texto (fontes Hershey)
+src/hand/      → "mão do professor": converte polilinhas (formas e letras)
                  em traços temporizados (posição, pressão, tempo)
    ▼
 src/physics/   → física do giz: Board, BoardSurface, ChalkStick, DepositBuffer,
@@ -108,10 +109,12 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - `protocol/CommandQueue`: um comando por vez; só avança quando o anterior terminou
   de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
 - Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
-  linha, seta, arco), `conectar`, `pausa`, `fala`, `apagar`, `limpar`. Os demais
-  geram aviso e são pulados.
+  linha, seta, arco), `escrever`, `conectar`, `pausa`, `fala`, `apagar`, `limpar`.
+  Os demais geram aviso e são pulados.
 - Posicionamento suportado: `"em":[x,y]` e `"ancora"`. Os relativos ficam para a
-  Etapa 4 (sem eles, a forma vai para o centro com um aviso).
+  Etapa 4 (sem eles, o elemento vai para o centro com um aviso). Em formas, `em` é
+  o ponto de referência da geometria (centro do círculo/arco, origem dos pontos
+  relativos); em `escrever`, é o centro do texto.
 - `scene/Scene`: elementos por id com bounding box; `conectar` liga as bordas
   (elipse ou caixa) com uma folga. `scene/Geometry2D`: formas → polilinhas;
   círculos/arcos com amostragem adaptativa (`curveTolerance`); tracejado e
@@ -126,7 +129,30 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - UI: `File > Abrir aula (.jsonl)...`; `PlayerBar` com Play / Pausar / Reiniciar
   e velocidade (0.5x, 1x, 2x, 4x); a `fala` aparece como legenda (`#Caption`)
   na parte inferior da lousa até a próxima fala.
-- Exemplo: `examples/formas.jsonl` exercita todos os comandos implementados.
+- Exemplos: `examples/formas.jsonl` (formas, conectar, apagar, limpar) e
+  `examples/texto.jsonl` (título, frases acentuadas e fórmulas).
+
+## Texto (comando `escrever`)
+
+- Fontes Hershey de traço único em `resources/fonts/` (embutidas pelo `.qrc`):
+  `rowmans.jhf` (Roman Simplex, usada no texto) e `scripts.jhf` (Script Simplex,
+  cursiva, reservada para uso futuro). A nota de uso original (`hershey.txt`) e a
+  origem dos arquivos (`FONTES.md`) acompanham os dados. Nada de TTF: o giz risca,
+  não preenche contornos.
+- `scene/HersheyFont`: lê o `.jhf` e converte cada caractere em polilinhas. Na
+  carga, normaliza a ordem dos traços para a mão (de cima para baixo, da esquerda
+  para a direita; traços abertos começam pela ponta de cima/esquerda). Letras
+  acentuadas que a fonte não tem (á à â ã é ê í ó ô õ ú ç e maiúsculas) são
+  compostas com letra base + diacrítico, e o acento é traçado depois da letra.
+  Também compõe `°` e `·`. Métricas (topo das maiúsculas/minúsculas, linha de
+  base) são medidas nos próprios glifos.
+- `scene/TextLayout`: `tamanho` = altura das maiúsculas (padrão 4); espaçamento
+  pelos limites do glifo, `tracking` e kerning simples por pares (AV, To, Y. …);
+  índice e expoente com `_` e `^` no próximo caractere ou no grupo `{…}`
+  (H_2O, x^2, e^{-x}): 60% do tamanho, deslocados para baixo/para cima.
+  Constantes em `SceneParams` (bloco "Texto").
+- A mão escreve com `Motion::Writing`: um pouco mais rápida que nas formas
+  (`writingSpeed`) e com levantada de giz menor entre traços (`writingPenLiftMs`).
 
 ## Paleta
 
@@ -167,7 +193,7 @@ Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 - [x] Etapa 0 — Janela com TitleBar customizada
 - [x] Etapa 1 — Física do giz com mouse
 - [x] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
-- [ ] Etapa 3 — Texto com fontes Hershey
+- [x] Etapa 3 — Texto com fontes Hershey
 - [ ] Etapa 4 — Motor de layout
 - [ ] Etapa 5 — Objetos 3D em perspectiva
 - [ ] Etapa 6 — Cliente de rede e IA

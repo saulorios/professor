@@ -87,7 +87,8 @@ void CommandQueue::startNext()
         m_inPause = true;
         m_pauseRemainingMs = std::max(0.0, command.value("segundos").toDouble()) * 1000.0;
         startPauseTimer();
-    } else if (type == "forma" || type == "conectar" || type == "apagar" || type == "limpar") {
+    } else if (type == "forma" || type == "escrever" || type == "conectar" || type == "apagar"
+               || type == "limpar") {
         m_scene.execute(command);
     } else {
         qWarning().noquote() << QString("Comando \"%1\" ainda não suportado nesta etapa; ignorado").arg(type);

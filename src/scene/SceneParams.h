@@ -1,6 +1,9 @@
 #pragma once
 
-// Constantes ajustáveis da cena. Tudo em unidades da lousa (graus nos ângulos).
+#include <QString>
+
+// Constantes ajustáveis da cena. Tudo em unidades da lousa (graus nos ângulos),
+// exceto onde indicado "unidades da fonte".
 struct SceneParams {
     double boardWidth = 160.0;
     double boardHeight = 90.0;
@@ -17,4 +20,13 @@ struct SceneParams {
     double arrowHeadLength = 2.5;
     double arrowHeadAngle = 26.0;   // abertura de cada lado da ponta da seta
     double connectGap = 0.8;        // folga entre a linha e a borda dos elementos ligados
+
+    // --- Texto (comando "escrever") ---
+    QString fontPath = ":/fonts/rowmans.jhf"; // Hershey Roman Simplex (traço único)
+    double textDefaultSize = 4.0;   // "tamanho" padrão: altura das maiúsculas
+    double scriptScale = 0.6;       // índices e expoentes: 60% do tamanho
+    double superscriptRise = 0.45;  // o expoente sobe esta fração do tamanho
+    double subscriptDrop = 0.25;    // o índice desce esta fração do tamanho
+    double kerning = 2.0;           // aproximação dos pares da tabela (unidades da fonte)
+    double tracking = -2.0;         // ajuste do espaço entre letras (unidades da fonte; < 0 aproxima)
 };

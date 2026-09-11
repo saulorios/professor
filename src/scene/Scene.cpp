@@ -26,6 +26,24 @@ bool readPoint(const QJsonValue &value, QPointF *out)
     return true;
 }
 
+// "pressao": "leve" | "normal" (padrão) | "forte"
+PressureLevel pressureLevel(const QJsonObject &command)
+{
+    const QString pressure = command.value("pressao").toString("normal");
+    if (pressure != "leve" && pressure != "normal" && pressure != "forte")
+        qWarning().noquote() << "Pressão desconhecida:" << pressure << "- usando normal";
+    return pressure == "leve"  ? PressureLevel::Light
+         : pressure == "forte" ? PressureLevel::Strong
+                               : PressureLevel::Normal;
+}
+
+void translate(std::vector<Polyline> &lines, const QPointF &offset)
+{
+    for (Polyline &pl : lines)
+        for (QPointF &p : pl)
+            p += offset;
+}
+
 double length(const QPointF &p)
 {
     return std::hypot(p.x(), p.y());
@@ -37,8 +55,13 @@ Scene::Scene(VirtualHand &hand, const SceneParams &params, QObject *parent)
     : QObject(parent)
     , m_params(params)
     , m_geometry(params)
+    , m_textLayout(m_font, params)
     , m_hand(hand)
 {
+    QString error;
+    if (!m_font.load(m_params.fontPath, &error))
+        qWarning().noquote() << "Fonte Hershey não carregada:" << error;
+
     connect(&m_hand, &VirtualHand::finished, this, [this] {
         if (!m_waitingHand)
             return;
@@ -52,6 +75,8 @@ void Scene::execute(const QJsonObject &command)
     const QString type = command.value("tipo").toString();
     if (type == "forma")
         drawShape(command);
+    else if (type == "escrever")
+        writeText(command);
     else if (type == "conectar")
         connectElements(command);
     else if (type == "apagar")
@@ -140,11 +165,7 @@ void Scene::drawShape(const QJsonObject &command)
         } else {
             return fail(QString("forma '%1' não suportada nesta etapa").arg(shape));
         }
-
-        const QPointF origin = placement(command, Geometry2D::bounds(lines));
-        for (Polyline &pl : lines)
-            for (QPointF &p : pl)
-                p += origin;
+        translate(lines, placement(command, Geometry2D::bounds(lines)));
     }
 
     std::vector<Polyline> all = lines;
@@ -152,6 +173,35 @@ void Scene::drawShape(const QJsonObject &command)
     element.bounds = Geometry2D::bounds(all);
     store(command, element);
     submit(command, lines, solid);
+}
+
+void Scene::writeText(const QJsonObject &command)
+{
+    const QString text = command.value("texto").toString();
+    if (text.trimmed().isEmpty())
+        return fail("escrever precisa de 'texto'");
+    if (!m_font.isLoaded())
+        return fail("escrever: fonte Hershey não carregada");
+    double size = m_params.textDefaultSize;
+    if (command.contains("tamanho") && (!readNumber(command, "tamanho", &size) || size <= 0))
+        return fail("escrever: 'tamanho' deve ser um número > 0");
+
+    QString missing;
+    std::vector<Polyline> strokes = m_textLayout.layout(text, size, &missing);
+    if (!missing.isEmpty())
+        qWarning().noquote() << "Caracteres sem glifo ignorados:" << missing;
+    if (strokes.empty())
+        return fail("escrever: nenhum caractere desenhável");
+
+    // Mesmo posicionamento das formas ("em" = centro do texto); a ordem dos
+    // traços (letra por letra) é preservada até a mão
+    translate(strokes, placement(command, Geometry2D::bounds(strokes)));
+
+    SceneElement element;
+    element.bounds = Geometry2D::bounds(strokes);
+    store(command, element);
+    m_waitingHand = true;
+    m_hand.draw(strokes, pressureLevel(command), Motion::Writing);
 }
 
 void Scene::connectElements(const QJsonObject &command)
@@ -206,12 +256,22 @@ void Scene::clearAll()
 QPointF Scene::placement(const QJsonObject &command, const QRectF &local) const
 {
     QPointF at;
-    if (readPoint(command.value("em"), &at))
-        return at;
+    if (readPoint(command.value("em"), &at)) {
+        // Texto: "em" é o centro do texto. Formas: é o ponto de referência da
+        // geometria (centro do círculo/arco, origem dos pontos relativos).
+        return command.value("tipo").toString() == "escrever" ? at - local.center() : at;
+    }
 
     QString anchor = command.value("ancora").toString();
     if (anchor.isEmpty()) {
         qWarning().noquote() << "Posicionamento ausente ou não suportado nesta etapa (use \"em\" ou \"ancora\"); usando o centro";
+        anchor = "centro";
+    }
+
+    static const QStringList known = {"topo_esquerda", "topo_centro", "topo_direita", "meio_esquerda", "centro",
+                                      "meio_direita", "base_esquerda", "base_centro", "base_direita"};
+    if (!known.contains(anchor)) {
+        qWarning().noquote() << "Âncora desconhecida:" << anchor << "- usando o centro";
         anchor = "centro";
     }
 
@@ -227,12 +287,7 @@ QPointF Scene::placement(const QJsonObject &command, const QRectF &local) const
         y = m - local.top();
     else if (anchor.startsWith("base"))
         y = h - m - local.bottom();
-
-    static const QStringList known = {"topo_esquerda", "topo_centro", "topo_direita", "meio_esquerda", "centro",
-                                      "meio_direita", "base_esquerda", "base_centro", "base_direita"};
-    if (!known.contains(anchor))
-        qWarning().noquote() << "Âncora desconhecida:" << anchor << "- usando o centro";
-    return known.contains(anchor) ? QPointF(x, y) : QPointF(w / 2 - local.center().x(), h / 2 - local.center().y());
+    return QPointF(x, y);
 }
 
 bool Scene::endpoint(const QJsonValue &value, QPointF *point, const SceneElement **element) const
@@ -287,15 +342,10 @@ void Scene::submit(const QJsonObject &command, const std::vector<Polyline> &line
     if (style != "solido" && style != "tracejado" && style != "pontilhado")
         qWarning().noquote() << "Estilo desconhecido:" << style << "- usando sólido";
 
-    const QString pressure = command.value("pressao").toString("normal");
-    const PressureLevel level = pressure == "leve"  ? PressureLevel::Light
-                              : pressure == "forte" ? PressureLevel::Strong
-                                                    : PressureLevel::Normal;
-
     std::vector<Polyline> strokes = m_geometry.styled(lines, lineStyle);
     strokes.insert(strokes.end(), solid.begin(), solid.end());
     m_waitingHand = true;
-    m_hand.draw(strokes, level);
+    m_hand.draw(strokes, pressureLevel(command));
 }
 
 void Scene::finishLater()

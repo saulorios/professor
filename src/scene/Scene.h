@@ -1,7 +1,9 @@
 #pragma once
 
 #include "Geometry2D.h"
+#include "HersheyFont.h"
 #include "SceneParams.h"
+#include "TextLayout.h"
 #include "hand/VirtualHand.h"
 
 #include <QHash>
@@ -27,7 +29,7 @@ class Scene : public QObject
 public:
     explicit Scene(VirtualHand &hand, const SceneParams &params = SceneParams(), QObject *parent = nullptr);
 
-    // Executa "forma", "conectar", "apagar" ou "limpar"
+    // Executa "forma", "escrever", "conectar", "apagar" ou "limpar"
     void execute(const QJsonObject &command);
 
     // Esquece todos os elementos e interrompe o desenho em andamento
@@ -41,11 +43,12 @@ signals:
 
 private:
     void drawShape(const QJsonObject &command);
+    void writeText(const QJsonObject &command);
     void connectElements(const QJsonObject &command);
     void eraseElement(const QJsonObject &command);
     void clearAll();
 
-    // Ponto de origem da forma pelo posicionamento; `local` é a bounding box em torno de (0,0)
+    // Ponto de origem do elemento pelo posicionamento; `local` é a bounding box em torno de (0,0)
     QPointF placement(const QJsonObject &command, const QRectF &local) const;
     // "de"/"ate": ponto [x,y] ou id de elemento
     bool endpoint(const QJsonValue &value, QPointF *point, const SceneElement **element) const;
@@ -60,6 +63,8 @@ private:
 
     SceneParams m_params;
     Geometry2D m_geometry;
+    HersheyFont m_font;
+    TextLayout m_textLayout;
     VirtualHand &m_hand;
     QHash<QString, SceneElement> m_elements;
     bool m_waitingHand = false;

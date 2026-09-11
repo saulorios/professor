@@ -1,0 +1,14 @@
+{"tipo":"escrever","id":"titulo","texto":"Escrita à mão na lousa","tamanho":6.5,"ancora":"topo_centro"}
+{"tipo":"forma","forma":"linha","de":[28,14],"ate":[132,14],"pressao":"leve"}
+{"tipo":"fala","texto":"A mão também escreve, letra por letra, com acentos."}
+{"tipo":"escrever","id":"frase1","texto":"Ação e emoção: você põe açúcar no café.","tamanho":3.5,"em":[80,25]}
+{"tipo":"escrever","id":"frase2","texto":"Vou à aula; o índio já pôs a mão na água.","tamanho":3.5,"em":[80,33]}
+{"tipo":"pausa","segundos":1}
+{"tipo":"fala","texto":"Índices e expoentes ficam menores e deslocados."}
+{"tipo":"escrever","id":"agua","texto":"H_2O + CO_2","tamanho":5,"em":[35,50]}
+{"tipo":"escrever","id":"energia","texto":"E = mc^2","tamanho":5,"em":[80,50]}
+{"tipo":"escrever","id":"pitagoras","texto":"a^2 + b^2 = c^2","tamanho":5,"em":[125,50]}
+{"tipo":"escrever","id":"exp","texto":"f(x) = e^{-x}","tamanho":5.5,"em":[55,66],"pressao":"forte"}
+{"tipo":"escrever","id":"angulo","texto":"Ângulo de 104,5° · ÉPOCA","tamanho":3.5,"em":[118,66]}
+{"tipo":"pausa","segundos":1}
+{"tipo":"fala","texto":"Fim da demonstração de escrita."}

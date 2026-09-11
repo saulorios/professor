@@ -16,9 +16,9 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
 
-# Avisos do compilador ativados em todos os alvos
+# Avisos do compilador ativados em todos os alvos; no MSVC, fontes lidos como UTF-8
 if(MSVC)
-    add_compile_options(/W4)
+    add_compile_options(/W4 /utf-8)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
@@ -60,6 +60,10 @@ add_library(scene STATIC
     src/scene/SceneParams.h
     src/scene/Geometry2D.h
     src/scene/Geometry2D.cpp
+    src/scene/HersheyFont.h
+    src/scene/HersheyFont.cpp
+    src/scene/TextLayout.h
+    src/scene/TextLayout.cpp
     src/scene/Scene.h
     src/scene/Scene.cpp
 )

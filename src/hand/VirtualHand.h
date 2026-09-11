@@ -18,6 +18,9 @@ class Board;
 // Pressão base pedida pelo comando ("pressao": "leve" | "normal" | "forte")
 enum class PressureLevel { Light, Normal, Strong };
 
+// Tipo de movimento: formas ou escrita (a escrita é um pouco mais rápida)
+enum class Motion { Shape, Writing };
+
 // "Mão do professor": recebe polilinhas já posicionadas (unidades da lousa) e
 // as reproduz ao longo do tempo como ChalkSamples, imitando uma mão humana:
 // acelera no início, freia em curvas fechadas e no fim, pressiona mais no meio
@@ -32,8 +35,8 @@ class VirtualHand : public QObject
 public:
     explicit VirtualHand(Board &board, const HandParams &params = HandParams(), QObject *parent = nullptr);
 
-    // Desenha as polilinhas, um traço de giz por polilinha
-    void draw(const std::vector<Polyline> &strokes, PressureLevel pressure);
+    // Desenha as polilinhas, um traço de giz por polilinha, na ordem recebida
+    void draw(const std::vector<Polyline> &strokes, PressureLevel pressure, Motion motion = Motion::Shape);
 
     // Passa o apagador em zigue-zague sobre a área
     void erase(const QRectF &area);
@@ -63,7 +66,7 @@ private:
         bool last;        // fim de traço (giz levanta)
     };
 
-    void beginJob(Tool tool);
+    void beginJob(Tool tool, double penLiftMs);
     void startPlayback();
     void finishLater();
     void appendStroke(const Polyline &units, double speed, float basePressure, bool wobble);
@@ -85,6 +88,7 @@ private:
     int m_generation = 0;         // invalida finalizações pendentes após cancel()
 
     Tool m_tool = Tool::Chalk;
+    double m_penLift = 0.0;       // tempo de levantar o giz no trabalho atual (ms)
     std::vector<TimedSample> m_plan;
     std::size_t m_next = 0;
     double m_playhead = 0.0;      // tempo simulado do trabalho atual (ms)

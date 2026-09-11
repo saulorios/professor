@@ -17,6 +17,10 @@ struct HandParams {
     double minCurveSpeed = 4.0;          // velocidade mínima nas quinas
     double sampleSpacing = 0.25;         // distância entre amostras ao longo do traço
 
+    // --- Escrita (comando "escrever") ---
+    double writingSpeed = 38.0;          // um pouco mais rápida que nas formas
+    double writingPenLiftMs = 60.0;      // levantar o giz entre os traços das letras
+
     // --- Pressão ---
     float pressureLight = 0.50f;         // "pressao": "leve"
     float pressureNormal = 0.68f;        // "pressao": "normal"

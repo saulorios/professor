@@ -2,5 +2,8 @@
 <RCC version="1.0">
     <qresource prefix="/">
         <file>style.qss</file>
+        <file>fonts/rowmans.jhf</file>
+        <file>fonts/scripts.jhf</file>
+        <file>fonts/hershey.txt</file>
     </qresource>
 </RCC>

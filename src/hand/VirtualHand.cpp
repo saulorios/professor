@@ -29,20 +29,23 @@ VirtualHand::VirtualHand(Board &board, const HandParams &params, QObject *parent
     connect(&m_timer, &QTimer::timeout, this, &VirtualHand::tick);
 }
 
-void VirtualHand::draw(const std::vector<Polyline> &strokes, PressureLevel pressure)
+void VirtualHand::draw(const std::vector<Polyline> &strokes, PressureLevel pressure, Motion motion)
 {
     const float base = pressure == PressureLevel::Light  ? m_params.pressureLight
                      : pressure == PressureLevel::Strong ? m_params.pressureStrong
                                                          : m_params.pressureNormal;
-    beginJob(Tool::Chalk);
+    const bool writing = motion == Motion::Writing;
+    const double speed = writing ? m_params.writingSpeed : m_params.baseSpeed;
+
+    beginJob(Tool::Chalk, writing ? m_params.writingPenLiftMs : m_params.penLiftMs);
     for (const Polyline &stroke : strokes)
-        appendStroke(stroke, m_params.baseSpeed, base, true);
+        appendStroke(stroke, speed, base, true);
     startPlayback();
 }
 
 void VirtualHand::erase(const QRectF &area)
 {
-    beginJob(Tool::Eraser);
+    beginJob(Tool::Eraser, m_params.penLiftMs);
 
     // Zigue-zague horizontal cobrindo a área (com margem), dentro da lousa
     const QRectF r = area.adjusted(-m_params.eraserMargin, -m_params.eraserMargin,
@@ -108,11 +111,12 @@ void VirtualHand::setSpeed(double factor)
     m_speed = factor;
 }
 
-void VirtualHand::beginJob(Tool tool)
+void VirtualHand::beginJob(Tool tool, double penLiftMs)
 {
     if (m_busy)
         cancel();
     m_tool = tool;
+    m_penLift = penLiftMs;
     m_plan.clear();
     m_next = 0;
     m_playhead = 0.0;
@@ -128,7 +132,7 @@ void VirtualHand::startPlayback()
         return;
     }
     // A mão ainda leva um instante para se levantar depois do último traço
-    m_planEnd = m_cursor + m_params.penLiftMs;
+    m_planEnd = m_cursor + m_penLift;
     if (!m_paused) {
         m_clock.start();
         m_timer.start();
@@ -192,7 +196,7 @@ void VirtualHand::appendStroke(const Polyline &units, double speed, float basePr
     const std::size_t n = m_points.size();
 
     // Tempo no ar até o início do traço
-    m_cursor += m_params.penLiftMs + length(m_points.front() - m_handPos) / m_params.travelSpeed * 1000.0;
+    m_cursor += m_penLift + length(m_points.front() - m_handPos) / m_params.travelSpeed * 1000.0;
 
     // Distância acumulada
     m_dist.assign(n, 0.0);
