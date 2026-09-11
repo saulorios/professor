@@ -1,0 +1,6 @@
+# Pastas de build (terminal e Qt Creator)
+build/
+
+# Configurações locais do Qt Creator
+.qtcreator/
+CMakeLists.txt.user*

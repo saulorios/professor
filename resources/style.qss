@@ -1,0 +1,72 @@
+/* ==========================================================================
+   Tema escuro inspirado no Antigravity IDE / VS Code
+   ========================================================================== */
+
+/* Janela principal e body: mesma cor de fundo da topbar */
+QMainWindow,
+#Body {
+    background-color: #1F1F1F;
+}
+
+/* Topbar: mesmo fundo do body, separada apenas por uma linha de 1px */
+TitleBar {
+    background-color: #1F1F1F;
+    border: none;
+    border-bottom: 1px solid #2B2B2B;
+}
+
+/* Logo (placeholder 16x16) */
+#Logo {
+    background-color: #0078D4;
+    border-radius: 3px;
+}
+
+/* Título centralizado */
+#TitleLabel {
+    background: transparent;
+    color: #CCCCCC;
+    font-size: 13px;
+}
+
+/* Menu embutido na topbar */
+QMenuBar {
+    background: transparent;
+    border: none;
+    padding: 0px;
+    spacing: 0px;
+    color: #CCCCCC;
+    font-size: 13px;
+}
+
+QMenuBar::item {
+    background: transparent;
+    padding: 4px 8px;
+    border-radius: 4px;
+}
+
+QMenuBar::item:selected,
+QMenuBar::item:pressed {
+    background-color: #2A2D2E;
+}
+
+/* Botões minimizar / maximizar / fechar
+   (as cores do ícone são propriedades do TitleBarButton) */
+TitleBarButton {
+    background: transparent;
+    border: none;
+    qproperty-iconColor: #CCCCCC;
+    qproperty-iconHoverColor: #CCCCCC;
+}
+
+TitleBarButton:hover {
+    background-color: #2A2D2E;
+}
+
+/* Fechar: hover vermelho com ícone branco */
+TitleBarButton#CloseButton {
+    qproperty-iconHoverColor: #FFFFFF;
+}
+
+TitleBarButton#CloseButton:hover {
+    background-color: #E81123;
+}
