@@ -13,6 +13,9 @@ class BoardSurface
 public:
     explicit BoardSurface(const PhysicsParams &params);
 
+    // Gera o height map de novo com os parâmetros de superfície (mesma resolução)
+    void generate(const PhysicsParams &params);
+
     int width() const { return m_width; }
     int height() const { return m_height; }
 

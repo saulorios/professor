@@ -130,3 +130,87 @@ PlayerBar QLabel {
     font-size: 16px;
     padding: 8px 24px;
 }
+
+/* Painel de ajuste (F10), encostado à direita da lousa */
+TuningPanel {
+    background-color: #252526;
+    border: none;
+    border-left: 1px solid #2B2B2B;
+}
+
+TuningPanel QScrollArea,
+TuningPanel #TuningContent {
+    background-color: #252526;
+    border: none;
+}
+
+TuningPanel QLabel {
+    background: transparent;
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+TuningPanel QLabel#TuningTitle {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+TuningPanel QLabel#TuningSection {
+    font-weight: bold;
+    padding-top: 10px;
+    padding-bottom: 2px;
+    border-bottom: 1px solid #2B2B2B;
+}
+
+TuningPanel QSlider::groove:horizontal {
+    height: 4px;
+    background: #2B2B2B;
+    border-radius: 2px;
+}
+
+TuningPanel QSlider::handle:horizontal {
+    width: 10px;
+    margin: -3px 0;
+    border-radius: 5px;
+    background: #CCCCCC;
+}
+
+TuningPanel QSlider::handle:horizontal:disabled {
+    background: #6B6B6B;
+}
+
+TuningPanel QPushButton {
+    background: transparent;
+    border: 1px solid #2B2B2B;
+    border-radius: 4px;
+    padding: 4px 8px;
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+TuningPanel QPushButton:hover {
+    background-color: #2A2D2E;
+}
+
+TuningPanel QScrollBar:vertical {
+    background: #252526;
+    width: 10px;
+    margin: 0;
+}
+
+TuningPanel QScrollBar::handle:vertical {
+    background: rgba(204, 204, 204, 60);
+    border-radius: 3px;
+    min-height: 30px;
+    margin: 2px;
+}
+
+TuningPanel QScrollBar::add-line:vertical,
+TuningPanel QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+TuningPanel QScrollBar::add-page:vertical,
+TuningPanel QScrollBar::sub-page:vertical {
+    background: none;
+}

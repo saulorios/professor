@@ -19,14 +19,22 @@ VirtualHand::VirtualHand(Board &board, const HandParams &params, QObject *parent
     : QObject(parent)
     , m_params(params)
     , m_board(board)
-    , m_stroke(board.params, board.surface, board.deposit, board.chalk)
-    , m_eraser(board.params, board.deposit)
-    , m_boardUnits(board.params.boardWidth / params.pixelsPerUnit, board.params.boardHeight / params.pixelsPerUnit)
+    , m_stroke(board.params(), board.surface, board.deposit, board.chalk)
+    , m_eraser(board.params(), board.deposit)
+    , m_boardUnits(board.params().boardWidth / params.pixelsPerUnit, board.params().boardHeight / params.pixelsPerUnit)
     , m_handPos(m_boardUnits.width() / 2.0, m_boardUnits.height() / 2.0)
 {
     m_timer.setTimerType(Qt::PreciseTimer);
     m_timer.setInterval(m_params.tickIntervalMs);
     connect(&m_timer, &QTimer::timeout, this, &VirtualHand::tick);
+}
+
+void VirtualHand::setParams(const HandParams &params)
+{
+    const double pixelsPerUnit = m_params.pixelsPerUnit;
+    m_params = params;
+    m_params.pixelsPerUnit = pixelsPerUnit;
+    m_timer.setInterval(m_params.tickIntervalMs);
 }
 
 void VirtualHand::draw(const std::vector<Polyline> &strokes, PressureLevel pressure, Motion motion)

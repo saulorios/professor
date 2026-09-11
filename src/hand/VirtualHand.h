@@ -49,6 +49,11 @@ public:
 
     void setPaused(bool paused);
     void setSpeed(double factor);
+
+    // Novos parâmetros valem a partir do próximo trabalho montado; a conversão
+    // unidades → px (pixelsPerUnit) acompanha a resolução fixa da lousa
+    void setParams(const HandParams &params);
+    const HandParams &params() const { return m_params; }
     bool isBusy() const { return m_busy; }
 
 signals:

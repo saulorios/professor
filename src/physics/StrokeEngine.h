@@ -24,7 +24,7 @@ private:
     // Depósito de um sub-passo, com a ponta centrada em (cx, cy)
     void stamp(float cx, float cy, float pressure, float tilt);
 
-    PhysicsParams m_params;
+    const PhysicsParams &m_params; // lido a cada uso: ajustes valem na hora
     const BoardSurface &m_surface;
     DepositBuffer &m_deposit;
     ChalkStick &m_chalk;

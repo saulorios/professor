@@ -42,6 +42,9 @@ public slots:
     // Legenda na parte inferior da lousa; texto vazio esconde a legenda
     void setCaption(const QString &text);
 
+    // Recompõe o fundo depois que a superfície da lousa foi regenerada
+    void rebuildSurface();
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;

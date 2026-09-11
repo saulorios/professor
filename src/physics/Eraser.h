@@ -28,7 +28,7 @@ private:
     void apply(float cx, float cy);
     void spreadTo(int x, int y, float amount);
 
-    PhysicsParams m_params;
+    const PhysicsParams &m_params; // lido a cada uso: ajustes valem na hora
     DepositBuffer &m_deposit;
     std::vector<std::uint32_t> m_passOf; // última passada que apagou cada pixel
     std::uint32_t m_pass = 0;

@@ -98,6 +98,22 @@ struct ChalkSample {
 Controles na lousa: botão esquerdo (ou ponta da caneta) = giz; botão direito =
 apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes).
 
+## Painel de ajuste (F10)
+
+- `ui/TuningPanel`: painel oculto encostado à direita da lousa, abre e fecha com
+  F10. Um slider por campo de `PhysicsParams` e `HandParams`, com o valor atual
+  (o nome do campo aparece no tooltip). As mudanças valem na hora para os
+  próximos traços: `StrokeEngine`/`Eraser` leem os parâmetros do `Board`
+  (`Board::setParams`) e a mão usa `VirtualHand::setParams` a partir do próximo
+  comando. Os campos da superfície regeneram o height map e só são aplicados ao
+  soltar o slider. As fórmulas da física não mudam.
+- Campos estruturais (`boardWidth`, `boardHeight`, `pixelsPerUnit`) aparecem
+  desabilitados: a resolução da lousa e a conversão 160 × 90 são fixas.
+- Botões: "Limpar lousa", "Restaurar padrões" e "Salvar", que grava
+  `params.json` na pasta do executável (`{"physics": {...}, "hand": {...}}`,
+  chaves = nomes dos campos). Ao iniciar, se o arquivo existir, os valores são
+  carregados dele (limitados às faixas dos sliders).
+
 ## Aula a partir de arquivo `.jsonl` (sem IA e sem rede)
 
 Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHand` → física.

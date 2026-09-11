@@ -40,6 +40,11 @@ BoardSurface::BoardSurface(const PhysicsParams &params)
     , m_height(params.boardHeight)
     , m_heights(static_cast<std::size_t>(params.boardWidth) * static_cast<std::size_t>(params.boardHeight))
 {
+    generate(params);
+}
+
+void BoardSurface::generate(const PhysicsParams &params)
+{
     // 2 oitavas (grão fino + ondulação leve), combinadas por peso em 0..1
     const float totalWeight = params.surfaceFineWeight + params.surfaceWaveWeight;
     const std::uint32_t waveSeed = params.surfaceSeed + 1; // oitava independente da primeira

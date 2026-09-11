@@ -1,14 +1,20 @@
 #include "MainWindow.h"
 #include "PlayerBar.h"
 #include "TitleBar.h"
+#include "TuningPanel.h"
 #include "render/BoardCanvas.h"
 
 #include <QApplication>
+#include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <QFileDialog>
+#include <QHBoxLayout>
 #include <QHoverEvent>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMouseEvent>
+#include <QShortcut>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -32,21 +38,30 @@ MainWindow::MainWindow(QWidget *parent)
     connect(this, &QWidget::windowTitleChanged, m_titleBar, &TitleBar::setTitle);
     m_titleBar->fileMenu()->addAction("Abrir aula (.jsonl)...", this, &MainWindow::openLesson);
 
-    // Body: lousa ocupando o espaço e a barra do player embaixo
+    // Body: lousa com o painel de ajuste (oculto) à direita e a barra do player embaixo
     m_body = new QWidget(this);
     m_body->setObjectName("Body");
-    auto *canvas = new BoardCanvas(m_board, m_body);
+    m_canvas = new BoardCanvas(m_board, m_body);
+    m_tuningPanel = new TuningPanel(m_body);
+    m_tuningPanel->hide();
     auto *playerBar = new PlayerBar(m_body);
+
+    auto *boardRow = new QHBoxLayout;
+    boardRow->setContentsMargins(0, 0, 0, 0);
+    boardRow->setSpacing(0);
+    boardRow->addWidget(m_canvas, 1);
+    boardRow->addWidget(m_tuningPanel);
+
     auto *bodyLayout = new QVBoxLayout(m_body);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
     bodyLayout->setSpacing(0);
-    bodyLayout->addWidget(canvas, 1);
+    bodyLayout->addLayout(boardRow, 1);
     bodyLayout->addWidget(playerBar);
     setCentralWidget(m_body);
 
     // Aula: a mão desenha no mesmo Board; a lousa só recompõe a região alterada
-    connect(&m_player, &LessonPlayer::boardChanged, canvas, &BoardCanvas::refresh);
-    connect(&m_player, &LessonPlayer::speech, canvas, &BoardCanvas::setCaption);
+    connect(&m_player, &LessonPlayer::boardChanged, m_canvas, &BoardCanvas::refresh);
+    connect(&m_player, &LessonPlayer::speech, m_canvas, &BoardCanvas::setCaption);
     connect(&m_player, &LessonPlayer::stateChanged, playerBar, [this, playerBar] {
         playerBar->setState(m_player.isLoaded(), m_player.isPlaying());
     });
@@ -54,6 +69,16 @@ MainWindow::MainWindow(QWidget *parent)
     connect(playerBar, &PlayerBar::pauseClicked, &m_player, &LessonPlayer::pause);
     connect(playerBar, &PlayerBar::restartClicked, &m_player, &LessonPlayer::restart);
     connect(playerBar, &PlayerBar::speedChanged, &m_player, &LessonPlayer::setSpeed);
+
+    // Painel de ajuste: F10 abre e fecha
+    auto *toggleTuning = new QShortcut(QKeySequence(Qt::Key_F10), this);
+    connect(toggleTuning, &QShortcut::activated, this, [this] {
+        m_tuningPanel->setVisible(!m_tuningPanel->isVisible());
+    });
+    connect(m_tuningPanel, &TuningPanel::valuesChanged, this, &MainWindow::applyParams);
+    connect(m_tuningPanel, &TuningPanel::clearRequested, m_canvas, &BoardCanvas::clear);
+    connect(m_tuningPanel, &TuningPanel::saveRequested, this, &MainWindow::saveParams);
+    loadParams();
 
     setWindowTitle("Lousa Inteligente");
 
@@ -71,6 +96,45 @@ void MainWindow::openLesson()
     QString error;
     if (!m_player.open(path, &error))
         QMessageBox::warning(this, "Abrir aula", error);
+}
+
+void MainWindow::applyParams(const TunableParams &values)
+{
+    if (m_board.setParams(values.physics))
+        m_canvas->rebuildSurface();
+    m_player.setHandParams(values.hand);
+}
+
+void MainWindow::loadParams()
+{
+    TunableParams values{m_board.params(), m_player.handParams()};
+    const QString path = paramsPath();
+    if (QFile::exists(path)) {
+        QString error;
+        if (TuningPanel::load(path, &values, &error)) {
+            applyParams(values);
+            m_tuningPanel->setStatus(QString("Carregado de %1").arg(QDir::toNativeSeparators(path)));
+        } else {
+            qWarning().noquote() << "params.json ignorado:" << error;
+            m_tuningPanel->setStatus(QString("Erro ao ler %1: %2").arg(QDir::toNativeSeparators(path), error));
+        }
+    }
+    m_tuningPanel->setValues(values);
+}
+
+void MainWindow::saveParams()
+{
+    const QString path = paramsPath();
+    QString error;
+    if (TuningPanel::save(path, m_tuningPanel->values(), &error))
+        m_tuningPanel->setStatus(QString("Salvo em %1").arg(QDir::toNativeSeparators(path)));
+    else
+        m_tuningPanel->setStatus(QString("Erro ao salvar %1: %2").arg(QDir::toNativeSeparators(path), error));
+}
+
+QString MainWindow::paramsPath() const
+{
+    return QDir(QCoreApplication::applicationDirPath()).filePath("params.json");
 }
 
 bool MainWindow::event(QEvent *event)

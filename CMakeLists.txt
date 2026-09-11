@@ -90,6 +90,8 @@ add_executable(lousa
     src/ui/PlayerBar.cpp
     src/ui/TitleBar.h
     src/ui/TitleBar.cpp
+    src/ui/TuningPanel.h
+    src/ui/TuningPanel.cpp
     resources/resources.qrc
 )
 

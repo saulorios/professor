@@ -28,6 +28,10 @@ public:
     void restart();
     void setSpeed(double factor);
 
+    // Parâmetros da mão (valem a partir do próximo comando desenhado)
+    void setHandParams(const HandParams &params) { m_hand.setParams(params); }
+    const HandParams &handParams() const { return m_hand.params(); }
+
     bool isLoaded() const { return m_loaded; }
     bool isPlaying() const { return m_playing; }
 

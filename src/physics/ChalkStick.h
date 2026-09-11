@@ -29,6 +29,9 @@ public:
     // Volta a ser um giz novo
     void reset();
 
+    // Novos parâmetros do giz; o desgaste atual é mantido dentro dos novos limites
+    void setParams(const PhysicsParams &params);
+
 private:
     float m_baseRadius;
     float m_maxRadius;

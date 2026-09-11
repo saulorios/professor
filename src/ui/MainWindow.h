@@ -6,7 +6,10 @@
 #include <QMainWindow>
 #include <QSize>
 
+class BoardCanvas;
 class TitleBar;
+class TuningPanel;
+struct TunableParams;
 
 // Parâmetros ajustáveis da janela principal
 struct MainWindowParams {
@@ -15,8 +18,9 @@ struct MainWindowParams {
     int resizeMargin = 5; // largura (px) da faixa junto às bordas que permite redimensionar
 };
 
-// Janela principal sem moldura nativa: TitleBar customizada + body com a lousa
-// e a barra do player. O redimensionamento pelas bordas usa QWindow::startSystemResize.
+// Janela principal sem moldura nativa: TitleBar customizada + body com a lousa,
+// o painel de ajuste (F10) e a barra do player. O redimensionamento pelas
+// bordas usa QWindow::startSystemResize.
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -32,6 +36,13 @@ protected:
 private:
     void openLesson();
 
+    // Painel de ajuste: aplica os valores e os carrega/grava em params.json,
+    // na pasta do executável
+    void applyParams(const TunableParams &values);
+    void loadParams();
+    void saveParams();
+    QString paramsPath() const;
+
     // Bordas da janela sob a posição informada (em coordenadas locais)
     Qt::Edges edgesAt(const QPoint &pos) const;
     void updateCursorShape(Qt::Edges edges);
@@ -41,5 +52,7 @@ private:
     LessonPlayer m_player;
     TitleBar *m_titleBar = nullptr;
     QWidget *m_body = nullptr;
+    BoardCanvas *m_canvas = nullptr;
+    TuningPanel *m_tuningPanel = nullptr;
     Qt::Edges m_cursorEdges; // bordas refletidas no cursor atual
 };

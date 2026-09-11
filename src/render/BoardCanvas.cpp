@@ -28,8 +28,8 @@ int scaleChannel(int value, float k)
 BoardCanvas::BoardCanvas(Board &board, QWidget *parent)
     : QWidget(parent)
     , m_board(board)
-    , m_stroke(board.params, board.surface, board.deposit, board.chalk)
-    , m_eraser(board.params, board.deposit)
+    , m_stroke(board.params(), board.surface, board.deposit, board.chalk)
+    , m_eraser(board.params(), board.deposit)
 {
     // O botão direito é o apagador: sem menu de contexto
     setContextMenuPolicy(Qt::PreventContextMenu);
@@ -55,6 +55,13 @@ BoardCanvas::BoardCanvas(Board &board, QWidget *parent)
 void BoardCanvas::clear()
 {
     m_board.clear();
+    refresh();
+}
+
+void BoardCanvas::rebuildSurface()
+{
+    buildBaseImage();
+    m_board.deposit.markDirty(m_board.deposit.bounds());
     refresh();
 }
 
