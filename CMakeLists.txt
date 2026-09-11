@@ -62,6 +62,9 @@ add_library(scene STATIC
     src/scene/Geometry2D.cpp
     src/scene/HersheyFont.h
     src/scene/HersheyFont.cpp
+    src/scene/JsonHelpers.h
+    src/scene/Layout.h
+    src/scene/Layout.cpp
     src/scene/TextLayout.h
     src/scene/TextLayout.cpp
     src/scene/Scene.h

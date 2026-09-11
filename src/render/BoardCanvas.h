@@ -6,7 +6,10 @@
 
 #include <QColor>
 #include <QImage>
+#include <QString>
 #include <QWidget>
+
+#include <vector>
 
 class QLabel;
 class QTabletEvent;
@@ -20,6 +23,18 @@ struct BoardCanvasParams {
     float boardVariation = 0.08f;     // variação de brilho da lousa pelo height map (±)
     QColor boardColor{0x1E, 0x26, 0x21};
     QColor chalkColor{0xF2, 0xF0, 0xE6};
+
+    // Modo de depuração (F12)
+    QColor debugBoxColor{0x4F, 0xC1, 0xFF};   // bounding boxes e ids
+    QColor debugAreaColor{0xD7, 0xBA, 0x7D};  // contorno da área útil
+    int debugFontPx = 11;
+};
+
+// Retângulo do modo de depuração, em pixels da lousa
+struct OverlayBox {
+    QRectF rect;
+    QString label;
+    bool area = false;   // contorno da área útil (tracejado)
 };
 
 // Lousa: converte mouse e mesa digitalizadora em ChalkSamples, alimenta a
@@ -32,6 +47,8 @@ class BoardCanvas : public QWidget
 public:
     explicit BoardCanvas(Board &board, QWidget *parent = nullptr);
 
+    bool isOverlayVisible() const { return m_overlayVisible; }
+
 public slots:
     // Limpa a lousa e troca o giz por um novo
     void clear();
@@ -42,8 +59,16 @@ public slots:
     // Legenda na parte inferior da lousa; texto vazio esconde a legenda
     void setCaption(const QString &text);
 
+    // Altura (px da lousa) da faixa reservada à legenda; a legenda ocupa ao menos isso
+    void setCaptionBand(double boardPixels);
+
     // Recompõe o fundo depois que a superfície da lousa foi regenerada
     void rebuildSurface();
+
+    // Modo de depuração: retângulos e rótulos desenhados por cima da lousa com
+    // QPainter, fora do DepositBuffer
+    void setOverlay(const std::vector<OverlayBox> &boxes);
+    void setOverlayVisible(bool visible);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -80,4 +105,8 @@ private:
     QImage m_image;  // cache exibido na tela
     Tool m_tool = Tool::None;
     QLabel *m_caption = nullptr;
+    double m_captionBandPx = 0.0;   // px da lousa
+
+    std::vector<OverlayBox> m_overlay;
+    bool m_overlayVisible = false;
 };

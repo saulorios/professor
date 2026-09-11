@@ -72,12 +72,52 @@ void BoardCanvas::setCaption(const QString &text)
     updateCaptionGeometry();
 }
 
+void BoardCanvas::setCaptionBand(double boardPixels)
+{
+    m_captionBandPx = boardPixels;
+    updateCaptionGeometry();
+}
+
+void BoardCanvas::setOverlay(const std::vector<OverlayBox> &boxes)
+{
+    m_overlay = boxes;
+    if (m_overlayVisible)
+        update();
+}
+
+void BoardCanvas::setOverlayVisible(bool visible)
+{
+    m_overlayVisible = visible;
+    update();
+}
+
 void BoardCanvas::paintEvent(QPaintEvent *)
 {
     // Só a região pedida pelo update() é redesenhada (o QPainter já vem recortado)
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
-    painter.drawImage(boardRect(), m_image);
+    const QRectF board = boardRect();
+    painter.drawImage(board, m_image);
+    if (!m_overlayVisible)
+        return;
+
+    // Modo de depuração: bounding boxes e ids por cima da lousa (fora do DepositBuffer)
+    painter.setRenderHint(QPainter::Antialiasing);
+    QFont font = painter.font();
+    font.setPixelSize(m_params.debugFontPx);
+    painter.setFont(font);
+    const qreal scale = board.width() / m_board.deposit.width();
+    for (const OverlayBox &box : m_overlay) {
+        const QRectF r(board.topLeft() + box.rect.topLeft() * scale, box.rect.size() * scale);
+        QPen pen(box.area ? m_params.debugAreaColor : m_params.debugBoxColor);
+        pen.setCosmetic(true);
+        pen.setStyle(box.area ? Qt::DashLine : Qt::SolidLine);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(r);
+        if (!box.label.isEmpty())
+            painter.drawText(r.topLeft() + QPointF(2.0, -3.0), box.label);
+    }
 }
 
 void BoardCanvas::resizeEvent(QResizeEvent *event)
@@ -255,8 +295,12 @@ void BoardCanvas::updateCaptionGeometry()
 {
     if (!m_caption || !m_caption->isVisible())
         return;
-    // Faixa na largura da lousa, encostada na borda inferior dela
-    const QRect board = boardRect().toRect();
-    const int h = m_caption->heightForWidth(board.width());
+    // Faixa na largura da lousa, encostada na borda inferior dela, com pelo menos
+    // a altura reservada à legenda (a cena não desenha nessa faixa)
+    const QRectF boardF = boardRect();
+    const QRect board = boardF.toRect();
+    const qreal scale = boardF.width() / m_board.deposit.width();
+    const int band = static_cast<int>(std::ceil(m_captionBandPx * scale));
+    const int h = std::max(band, m_caption->heightForWidth(board.width()));
     m_caption->setGeometry(board.left(), board.bottom() + 1 - h, board.width(), h);
 }

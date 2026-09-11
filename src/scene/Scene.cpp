@@ -1,30 +1,15 @@
 #include "Scene.h"
+#include "JsonHelpers.h"
 
 #include <QDebug>
-#include <QJsonArray>
 #include <QTimer>
 
+#include <algorithm>
 #include <cmath>
 
 namespace {
 
-bool readNumber(const QJsonObject &object, const char *key, double *out)
-{
-    const QJsonValue value = object.value(QLatin1String(key));
-    if (!value.isDouble())
-        return false;
-    *out = value.toDouble();
-    return true;
-}
-
-bool readPoint(const QJsonValue &value, QPointF *out)
-{
-    const QJsonArray array = value.toArray();
-    if (!value.isArray() || array.size() != 2 || !array[0].isDouble() || !array[1].isDouble())
-        return false;
-    *out = QPointF(array[0].toDouble(), array[1].toDouble());
-    return true;
-}
+constexpr double kSqrt2 = 1.4142135623730951;
 
 // "pressao": "leve" | "normal" (padrão) | "forte"
 PressureLevel pressureLevel(const QJsonObject &command)
@@ -55,6 +40,7 @@ Scene::Scene(VirtualHand &hand, const SceneParams &params, QObject *parent)
     : QObject(parent)
     , m_params(params)
     , m_geometry(params)
+    , m_layout(params)
     , m_textLayout(m_font, params)
     , m_hand(hand)
 {
@@ -79,6 +65,8 @@ void Scene::execute(const QJsonObject &command)
         writeText(command);
     else if (type == "conectar")
         connectElements(command);
+    else if (type == "destacar")
+        highlight(command);
     else if (type == "apagar")
         eraseElement(command);
     else if (type == "limpar")
@@ -93,6 +81,13 @@ void Scene::reset()
     m_waitingHand = false;
     m_hand.cancel();
     m_elements.clear();
+    emit elementsChanged();
+}
+
+QRectF Scene::bounds(const QString &id) const
+{
+    const SceneElement *element = Layout::find(m_elements, id);
+    return element ? element->bounds : QRectF();
 }
 
 void Scene::drawShape(const QJsonObject &command)
@@ -127,21 +122,22 @@ void Scene::drawShape(const QJsonObject &command)
         lines.push_back(m_geometry.line(from, to));
         if (shape == "seta")
             solid.push_back(m_geometry.arrowHead(from, to));
+        element.obstacle = false; // um traço diagonal não ocupa a sua bounding box
     } else {
-        // Geometria construída em torno de (0,0) e depois posicionada
+        // Geometria construída em torno de (0,0), que é o ponto de referência da forma
         double a = 0, b = 0, c = 0;
         if (shape == "circulo") {
-            if (!readNumber(command, "raio", &a) || a <= 0)
+            if (!json::readNumber(command, "raio", &a) || a <= 0)
                 return fail("circulo precisa de 'raio' > 0");
             lines.push_back(m_geometry.circle({0, 0}, a));
             element.kind = SceneElement::Kind::Ellipse;
         } else if (shape == "elipse") {
-            if (!readNumber(command, "raio_x", &a) || !readNumber(command, "raio_y", &b) || a <= 0 || b <= 0)
+            if (!json::readNumber(command, "raio_x", &a) || !json::readNumber(command, "raio_y", &b) || a <= 0 || b <= 0)
                 return fail("elipse precisa de 'raio_x' e 'raio_y' > 0");
             lines.push_back(m_geometry.ellipse({0, 0}, a, b));
             element.kind = SceneElement::Kind::Ellipse;
         } else if (shape == "retangulo") {
-            if (!readNumber(command, "largura", &a) || !readNumber(command, "altura", &b) || a <= 0 || b <= 0)
+            if (!json::readNumber(command, "largura", &a) || !json::readNumber(command, "altura", &b) || a <= 0 || b <= 0)
                 return fail("retangulo precisa de 'largura' e 'altura' > 0");
             lines.push_back(m_geometry.rectangle({0, 0}, a, b));
         } else if (shape == "triangulo" || shape == "poligono") {
@@ -150,7 +146,7 @@ void Scene::drawShape(const QJsonObject &command)
             std::vector<QPointF> points;
             for (const QJsonValue &v : array) {
                 QPointF p;
-                if (!readPoint(v, &p))
+                if (!json::readPoint(v, &p))
                     return fail(QString("%1: ponto inválido em 'pontos'").arg(shape));
                 points.push_back(p);
             }
@@ -158,20 +154,24 @@ void Scene::drawShape(const QJsonObject &command)
                 return fail(QString("%1 precisa de %2 a %3 pontos").arg(shape).arg(minPoints).arg(maxPoints));
             lines.push_back(m_geometry.polygon({0, 0}, points));
         } else if (shape == "arco") {
-            if (!readNumber(command, "raio", &a) || !readNumber(command, "angulo_inicio", &b)
-                || !readNumber(command, "angulo_fim", &c) || a <= 0)
+            if (!json::readNumber(command, "raio", &a) || !json::readNumber(command, "angulo_inicio", &b)
+                || !json::readNumber(command, "angulo_fim", &c) || a <= 0)
                 return fail("arco precisa de 'raio' > 0, 'angulo_inicio' e 'angulo_fim'");
             lines.push_back(m_geometry.arc({0, 0}, a, b, c));
         } else {
             return fail(QString("forma '%1' não suportada nesta etapa").arg(shape));
         }
-        translate(lines, placement(command, Geometry2D::bounds(lines)));
+        const QPointF offset = m_layout.place(command, Geometry2D::bounds(lines), QPointF(0, 0), m_elements);
+        translate(lines, offset);
+        element.anchor = offset;
     }
 
     std::vector<Polyline> all = lines;
     all.insert(all.end(), solid.begin(), solid.end());
     element.bounds = Geometry2D::bounds(all);
-    store(command, element);
+    if (shape == "linha" || shape == "seta")
+        element.anchor = element.bounds.center();
+    store(command, element, shape);
     submit(command, lines, solid);
 }
 
@@ -183,7 +183,7 @@ void Scene::writeText(const QJsonObject &command)
     if (!m_font.isLoaded())
         return fail("escrever: fonte Hershey não carregada");
     double size = m_params.textDefaultSize;
-    if (command.contains("tamanho") && (!readNumber(command, "tamanho", &size) || size <= 0))
+    if (command.contains("tamanho") && (!json::readNumber(command, "tamanho", &size) || size <= 0))
         return fail("escrever: 'tamanho' deve ser um número > 0");
 
     QString missing;
@@ -193,13 +193,16 @@ void Scene::writeText(const QJsonObject &command)
     if (strokes.empty())
         return fail("escrever: nenhum caractere desenhável");
 
-    // Mesmo posicionamento das formas ("em" = centro do texto); a ordem dos
-    // traços (letra por letra) é preservada até a mão
-    translate(strokes, placement(command, Geometry2D::bounds(strokes)));
+    // O ponto de referência do texto é o seu centro; a ordem dos traços
+    // (letra por letra) é preservada até a mão
+    const QRectF local = Geometry2D::bounds(strokes);
+    const QPointF offset = m_layout.place(command, local, local.center(), m_elements);
+    translate(strokes, offset);
 
     SceneElement element;
     element.bounds = Geometry2D::bounds(strokes);
-    store(command, element);
+    element.anchor = local.center() + offset;
+    store(command, element, QString("\"%1\"").arg(text));
     m_waitingHand = true;
     m_hand.draw(strokes, pressureLevel(command), Motion::Writing);
 }
@@ -208,13 +211,14 @@ void Scene::connectElements(const QJsonObject &command)
 {
     const QString fromId = command.value("de").toString();
     const QString toId = command.value("ate").toString();
-    if (!m_elements.contains(fromId) || !m_elements.contains(toId))
+    const SceneElement *a = Layout::find(m_elements, fromId);
+    const SceneElement *b = Layout::find(m_elements, toId);
+    if (!a || !b)
         return fail(QString("conectar: elemento '%1' ou '%2' não existe").arg(fromId, toId));
 
-    const SceneElement &a = m_elements[fromId];
-    const SceneElement &b = m_elements[toId];
-    QPointF from = borderPoint(a, b.bounds.center());
-    QPointF to = borderPoint(b, a.bounds.center());
+    // Liga as bordas (não os centros), com uma pequena folga
+    QPointF from = borderPoint(*a, b->bounds.center());
+    QPointF to = borderPoint(*b, a->bounds.center());
     const QPointF d = to - from;
     const double len = length(d);
     if (len <= 2.0 * m_params.connectGap)
@@ -232,16 +236,53 @@ void Scene::connectElements(const QJsonObject &command)
     std::vector<Polyline> all = lines;
     all.insert(all.end(), solid.begin(), solid.end());
     element.bounds = Geometry2D::bounds(all);
-    store(command, element);
+    element.anchor = element.bounds.center();
+    element.obstacle = false;
+    store(command, element, "conectar");
     submit(command, lines, solid);
+}
+
+void Scene::highlight(const QJsonObject &command)
+{
+    const QString targetId = command.value("alvo").toString();
+    const SceneElement *target = Layout::find(m_elements, targetId);
+    if (!target)
+        return fail(QString("destacar: elemento '%1' não existe").arg(targetId));
+
+    const QString mode = command.value("modo").toString();
+    const QRectF r = target->bounds;
+    const double gap = m_params.highlightGap;
+    std::vector<Polyline> lines;
+    if (mode == "sublinhar") {
+        lines.push_back(m_geometry.line({r.left(), r.bottom() + gap}, {r.right(), r.bottom() + gap}));
+    } else if (mode == "circular") {
+        // Elipse que passa pelos cantos da caixa (com folga): envolve o elemento todo
+        const QRectF box = r.adjusted(-gap, -gap, gap, gap);
+        lines.push_back(m_geometry.ellipse(box.center(), box.width() / 2 * kSqrt2, box.height() / 2 * kSqrt2));
+    } else if (mode == "caixa") {
+        const QRectF box = r.adjusted(-gap, -gap, gap, gap);
+        lines.push_back(m_geometry.rectangle(box.center(), box.width(), box.height()));
+    } else {
+        return fail(QString("destacar: modo '%1' desconhecido (sublinhar, circular ou caixa)").arg(mode));
+    }
+
+    SceneElement element;
+    element.bounds = Geometry2D::bounds(lines);
+    element.anchor = element.bounds.center();
+    element.obstacle = false;
+    store(command, element, mode);
+    submit(command, lines);
 }
 
 void Scene::eraseElement(const QJsonObject &command)
 {
     const QString id = command.value("id").toString();
-    if (!m_elements.contains(id))
+    const SceneElement *element = Layout::find(m_elements, id);
+    if (!element)
         return fail(QString("apagar: elemento '%1' não existe").arg(id));
-    const QRectF area = m_elements.take(id).bounds;
+    const QRectF area = element->bounds;
+    m_elements.erase(m_elements.begin() + (element - m_elements.data()));
+    emit elementsChanged();
     m_waitingHand = true;
     m_hand.erase(area);
 }
@@ -249,56 +290,20 @@ void Scene::eraseElement(const QJsonObject &command)
 void Scene::clearAll()
 {
     m_elements.clear();
+    emit elementsChanged();
     m_waitingHand = true;
     m_hand.clearBoard();
 }
 
-QPointF Scene::placement(const QJsonObject &command, const QRectF &local) const
-{
-    QPointF at;
-    if (readPoint(command.value("em"), &at)) {
-        // Texto: "em" é o centro do texto. Formas: é o ponto de referência da
-        // geometria (centro do círculo/arco, origem dos pontos relativos).
-        return command.value("tipo").toString() == "escrever" ? at - local.center() : at;
-    }
-
-    QString anchor = command.value("ancora").toString();
-    if (anchor.isEmpty()) {
-        qWarning().noquote() << "Posicionamento ausente ou não suportado nesta etapa (use \"em\" ou \"ancora\"); usando o centro";
-        anchor = "centro";
-    }
-
-    static const QStringList known = {"topo_esquerda", "topo_centro", "topo_direita", "meio_esquerda", "centro",
-                                      "meio_direita", "base_esquerda", "base_centro", "base_direita"};
-    if (!known.contains(anchor)) {
-        qWarning().noquote() << "Âncora desconhecida:" << anchor << "- usando o centro";
-        anchor = "centro";
-    }
-
-    // Horizontal: esquerda / centro / direita; vertical: topo / meio / base
-    const double w = m_params.boardWidth, h = m_params.boardHeight, m = m_params.margin;
-    double x = w / 2 - local.center().x();
-    double y = h / 2 - local.center().y();
-    if (anchor.endsWith("_esquerda"))
-        x = m - local.left();
-    else if (anchor.endsWith("_direita"))
-        x = w - m - local.right();
-    if (anchor.startsWith("topo"))
-        y = m - local.top();
-    else if (anchor.startsWith("base"))
-        y = h - m - local.bottom();
-    return QPointF(x, y);
-}
-
 bool Scene::endpoint(const QJsonValue &value, QPointF *point, const SceneElement **element) const
 {
-    if (readPoint(value, point))
+    if (json::readPoint(value, point))
         return true;
-    const auto it = m_elements.constFind(value.toString());
-    if (!value.isString() || it == m_elements.constEnd())
+    const SceneElement *found = value.isString() ? Layout::find(m_elements, value.toString()) : nullptr;
+    if (!found)
         return false;
-    *element = &it.value();
-    *point = it->bounds.center();
+    *element = found;
+    *point = found->bounds.center();
     return true;
 }
 
@@ -312,7 +317,7 @@ QPointF Scene::borderPoint(const SceneElement &element, const QPointF &toward) c
     const double rx = element.bounds.width() / 2, ry = element.bounds.height() / 2;
 
     if (element.kind == SceneElement::Kind::Ellipse) {
-        // Raio da elipse na direção de d
+        // Elipse inscrita na bounding box: raio na direção de d
         const double cs = d.x() / len, sn = d.y() / len;
         const double r = rx * ry / std::sqrt(ry * ry * cs * cs + rx * rx * sn * sn);
         return c + d / len * r;
@@ -323,14 +328,20 @@ QPointF Scene::borderPoint(const SceneElement &element, const QPointF &toward) c
     return c + d * std::min(tx, ty);
 }
 
-void Scene::store(const QJsonObject &command, const SceneElement &element)
+void Scene::store(const QJsonObject &command, SceneElement element, const QString &label)
 {
-    const QString id = command.value("id").toString();
-    if (id.isEmpty())
-        return;
-    if (m_elements.contains(id))
-        qWarning().noquote() << "Id repetido:" << id << "- o elemento anterior foi substituído";
-    m_elements.insert(id, element);
+    element.id = command.value("id").toString();
+    element.label = element.id.isEmpty() ? label : element.id;
+    if (!element.id.isEmpty()) {
+        const auto old = std::find_if(m_elements.begin(), m_elements.end(),
+                                      [&](const SceneElement &e) { return e.id == element.id; });
+        if (old != m_elements.end()) {
+            qWarning().noquote() << "Id repetido:" << element.id << "- o elemento anterior foi substituído";
+            m_elements.erase(old);
+        }
+    }
+    m_elements.push_back(element);
+    emit elementsChanged();
 }
 
 void Scene::submit(const QJsonObject &command, const std::vector<Polyline> &lines, const std::vector<Polyline> &solid)

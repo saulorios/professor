@@ -36,6 +36,9 @@ protected:
 private:
     void openLesson();
 
+    // Modo de depuração (F12): bounding boxes e ids dos elementos da cena
+    void updateOverlay();
+
     // Painel de ajuste: aplica os valores e os carrega/grava em params.json,
     // na pasta do executável
     void applyParams(const TunableParams &values);

@@ -7,7 +7,14 @@
 struct SceneParams {
     double boardWidth = 160.0;
     double boardHeight = 90.0;
-    double margin = 4.0;            // distância das âncoras até a borda da lousa
+    double margin = 4.0;            // distância da área útil até as bordas (e até a faixa da legenda)
+
+    // --- Layout ---
+    double captionBandHeight = 5.0; // faixa reservada à legenda da fala, na base da lousa
+    double relativeMargin = 3.0;    // "margem" padrão de abaixo_de/acima_de/direita_de/esquerda_de
+    double collisionGap = 1.0;      // folga ao afastar um elemento de outro
+    int maxCollisionAttempts = 10;  // depois disso a sobreposição é aceita (com aviso)
+    double highlightGap = 1.0;      // folga entre o elemento e o sublinhado, círculo ou caixa
 
     double curveTolerance = 0.03;   // desvio máximo entre a curva e a corda (amostragem adaptativa)
     int minCurveSegments = 12;      // mínimo de segmentos num círculo completo

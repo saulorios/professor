@@ -1,0 +1,14 @@
+{"tipo":"escrever","id":"titulo","texto":"Molécula de H_2O","tamanho":6,"ancora":"topo_centro"}
+{"tipo":"fala","texto":"Vamos ver como a água é formada."}
+{"tipo":"forma","id":"O","forma":"circulo","raio":6,"abaixo_de":"titulo","margem":15}
+{"tipo":"escrever","texto":"O","em_centro_de":"O"}
+{"tipo":"fala","texto":"No centro fica o oxigênio."}
+{"tipo":"forma","id":"H1","forma":"circulo","raio":4,"relativo_a":"O","angulo":-142,"distancia":18}
+{"tipo":"forma","id":"H2","forma":"circulo","raio":4,"relativo_a":"O","angulo":-38,"distancia":18}
+{"tipo":"escrever","texto":"H","em_centro_de":"H1"}
+{"tipo":"escrever","texto":"H","em_centro_de":"H2"}
+{"tipo":"conectar","de":"O","ate":"H1"}
+{"tipo":"conectar","de":"O","ate":"H2"}
+{"tipo":"fala","texto":"Ligado a ele, dois hidrogênios, formando um ângulo de cerca de 104 graus."}
+{"tipo":"forma","forma":"arco","relativo_a":"O","distancia":0,"raio":10,"angulo_inicio":-142,"angulo_fim":-38,"estilo":"tracejado"}
+{"tipo":"escrever","texto":"104,5°","tamanho":3,"abaixo_de":"O","margem":8}

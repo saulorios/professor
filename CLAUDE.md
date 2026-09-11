@@ -34,7 +34,8 @@ src/physics/   → física do giz: Board, BoardSurface, ChalkStick, DepositBuffe
                  StrokeEngine, Eraser
    ▼
 src/render/    → BoardCanvas: desenha o DepositBuffer na tela
-src/ui/        → MainWindow, TitleBar, PlayerBar, LessonPlayer e demais widgets
+src/ui/        → MainWindow, TitleBar, PlayerBar, LessonPlayer, TuningPanel e
+                 demais widgets
 ```
 
 ### Regras de dependência (importante)
@@ -71,14 +72,18 @@ struct ChalkSample {
 - A lousa em pixels mede **1920 × 1080** (12 px por unidade), definida em
   `PhysicsParams`. A `BoardCanvas` exibe essa imagem em 16:9, escalada e
   centralizada no body; o resto do body fica com a cor da UI.
+- **Área útil**: 4 unidades para dentro de cada borda; embaixo, o limite é a
+  faixa reservada à legenda da fala (`SceneParams::captionBandHeight`, 5
+  unidades), e não a borda da lousa. Hoje: x 4–156, y 4–81.
 
 ## Física do giz (`src/physics/`)
 
-- `Board`: estado compartilhado (superfície, depósito e giz). Mouse e mão virtual
-  escrevem no mesmo `Board`, cada um com o seu `StrokeEngine`/`Eraser`.
+- `Board`: estado compartilhado (parâmetros, superfície, depósito e giz). Mouse e
+  mão virtual escrevem no mesmo `Board`, cada um com o seu `StrokeEngine`/`Eraser`,
+  que leem os parâmetros do `Board` a cada uso.
 - `PhysicsParams`: todas as constantes ajustáveis da física (lousa, superfície,
   giz, traço, apagador). `BoardCanvasParams` (em `render/`) guarda as da tela:
-  pressão do mouse (0.6), faixa de inclinação da caneta e cores.
+  pressão do mouse (0.6), faixa de inclinação da caneta, cores e o modo de depuração.
 - `BoardSurface`: height map 0..1 com value noise em 2 oitavas (grão de ~2 px +
   ondulação de ~40 px), seed fixa e curva `surfaceGamma`.
 - `StrokeEngine`: velocidade suavizada; sub-passos a cada 0.5 px (interpolando
@@ -96,7 +101,8 @@ struct ChalkSample {
   recalcula e redesenha só essa região (`refresh()`).
 
 Controles na lousa: botão esquerdo (ou ponta da caneta) = giz; botão direito =
-apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes).
+apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes); F10 = painel de
+ajuste; F12 = modo de depuração do layout.
 
 ## Painel de ajuste (F10)
 
@@ -125,16 +131,16 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - `protocol/CommandQueue`: um comando por vez; só avança quando o anterior terminou
   de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
 - Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
-  linha, seta, arco), `escrever`, `conectar`, `pausa`, `fala`, `apagar`, `limpar`.
-  Os demais geram aviso e são pulados.
-- Posicionamento suportado: `"em":[x,y]` e `"ancora"`. Os relativos ficam para a
-  Etapa 4 (sem eles, o elemento vai para o centro com um aviso). Em formas, `em` é
-  o ponto de referência da geometria (centro do círculo/arco, origem dos pontos
-  relativos); em `escrever`, é o centro do texto.
-- `scene/Scene`: elementos por id com bounding box; `conectar` liga as bordas
-  (elipse ou caixa) com uma folga. `scene/Geometry2D`: formas → polilinhas;
-  círculos/arcos com amostragem adaptativa (`curveTolerance`); tracejado e
-  pontilhado quebram as polilinhas. Constantes em `SceneParams`.
+  linha, seta, arco), `escrever`, `conectar`, `destacar`, `pausa`, `fala`,
+  `apagar`, `limpar`. Os demais geram aviso e são pulados.
+- `scene/Scene`: guarda todos os elementos desenhados (com ou sem id) com a
+  bounding box e o ponto de referência; `conectar` liga as bordas dos elementos
+  (elipse inscrita na bounding box para círculos/elipses, a própria caixa para os
+  demais), nunca os centros; `destacar` desenha `sublinhar` (linha sob a caixa),
+  `circular` (elipse que passa pelos cantos da caixa) ou `caixa` (retângulo), com
+  a folga `highlightGap`. `scene/Geometry2D`: formas → polilinhas; círculos/arcos
+  com amostragem adaptativa (`curveTolerance`); tracejado e pontilhado quebram as
+  polilinhas. Constantes em `SceneParams`.
 - `hand/VirtualHand`: monta uma linha do tempo por comando e a reproduz num QTimer
   de ~60 Hz: acelera no início, freia em curvas fechadas e no fim; pressão sobe
   no toque e alivia ao levantar; tremor determinístico de 0.1–0.3 unidade;
@@ -144,9 +150,38 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   Constantes em `HandParams`.
 - UI: `File > Abrir aula (.jsonl)...`; `PlayerBar` com Play / Pausar / Reiniciar
   e velocidade (0.5x, 1x, 2x, 4x); a `fala` aparece como legenda (`#Caption`)
-  na parte inferior da lousa até a próxima fala.
-- Exemplos: `examples/formas.jsonl` (formas, conectar, apagar, limpar) e
-  `examples/texto.jsonl` (título, frases acentuadas e fórmulas).
+  na faixa reservada da base da lousa até a próxima fala.
+- Exemplos: `examples/formas.jsonl` (formas, conectar, apagar, limpar),
+  `examples/texto.jsonl` (título, frases acentuadas e fórmulas) e
+  `examples/agua.jsonl` (Exemplo 1 do protocolo: posicionamento relativo).
+
+## Motor de layout (`scene/Layout`)
+
+- Resolve todas as formas de posicionamento da seção 3 do protocolo, em unidades
+  da lousa e dentro da área útil:
+  - `ancora`: 9 posições na área útil (`base_*` encosta na faixa da legenda).
+  - `abaixo_de` / `acima_de` / `direita_de` / `esquerda_de`: encostado na caixa
+    da referência a `margem` (padrão `relativeMargin`), com `alinhar`
+    `inicio` | `centro` (padrão) | `fim` no outro eixo.
+  - `relativo_a` + `angulo` (0 = direita, positivo = anti-horário) + `distancia`:
+    o ponto de referência do elemento vai para esse ponto polar a partir do
+    ponto de referência da referência.
+  - `em_centro_de`: centraliza a caixa dentro da caixa da referência.
+  - `em`: o ponto de referência do elemento vai para [x, y].
+- Ponto de referência: nas formas, a origem da geometria (centro do círculo, do
+  arco, do retângulo; origem dos `pontos` relativos); no texto, o centro do texto.
+- Elemento fora da área útil é empurrado para dentro, com aviso no log.
+- Colisão com a caixa de outro elemento: desloca na direção do posicionamento
+  (abaixo → para baixo, relativo_a → na direção do ângulo, âncora → para dentro)
+  até não colidir, no máximo `maxCollisionAttempts` (10) vezes; depois aceita,
+  com aviso. `em` e `em_centro_de` não são deslocados (são pedidos explícitos), e
+  a referência do `relativo_a` pode ser tocada (ex.: arco com `distancia` 0).
+  Linhas, setas, conexões e destaques não contam como obstáculo (a caixa de um
+  traço diagonal cobre uma área que ele não ocupa).
+- Referência a id inexistente: usa a âncora `centro`, com aviso no log.
+- Modo de depuração (F12): a `BoardCanvas` desenha por cima da lousa, com
+  QPainter e fora do `DepositBuffer`, a área útil (tracejada) e as bounding boxes
+  com os ids (ou uma descrição, para elementos sem id).
 
 ## Texto (comando `escrever`)
 
@@ -211,7 +246,7 @@ Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 - [x] Etapa 1 — Física do giz com mouse
 - [x] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
 - [x] Etapa 3 — Texto com fontes Hershey
-- [ ] Etapa 4 — Motor de layout
+- [x] Etapa 4 — Motor de layout
 - [ ] Etapa 5 — Objetos 3D em perspectiva
 - [ ] Etapa 6 — Cliente de rede e IA
 - [ ] Etapa 7 — Renderização em OpenGL (opcional)

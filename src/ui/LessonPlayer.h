@@ -32,6 +32,9 @@ public:
     void setHandParams(const HandParams &params) { m_hand.setParams(params); }
     const HandParams &handParams() const { return m_hand.params(); }
 
+    // Cena da aula (elementos desenhados, área útil), para o modo de depuração
+    const Scene &scene() const { return m_scene; }
+
     bool isLoaded() const { return m_loaded; }
     bool isPlaying() const { return m_playing; }
 

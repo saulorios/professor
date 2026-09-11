@@ -80,11 +80,38 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_tuningPanel, &TuningPanel::saveRequested, this, &MainWindow::saveParams);
     loadParams();
 
+    // Modo de depuração: F12 mostra/esconde as bounding boxes e ids
+    auto *toggleDebug = new QShortcut(QKeySequence(Qt::Key_F12), this);
+    connect(toggleDebug, &QShortcut::activated, this, [this] {
+        m_canvas->setOverlayVisible(!m_canvas->isOverlayVisible());
+    });
+    connect(&m_player.scene(), &Scene::elementsChanged, this, &MainWindow::updateOverlay);
+    updateOverlay();
+
+    // A legenda ocupa a faixa que a cena reserva para ela na base da lousa
+    const SceneParams &scene = m_player.scene().params();
+    m_canvas->setCaptionBand(scene.captionBandHeight * m_board.params().boardWidth / scene.boardWidth);
+
     setWindowTitle("Lousa Inteligente");
 
     // Intercepta cliques sobre as bordas em qualquer widget desta janela
     // (ex.: o botão fechar no canto superior direito)
     qApp->installEventFilter(this);
+}
+
+void MainWindow::updateOverlay()
+{
+    // Unidades da lousa → pixels da lousa
+    const Scene &scene = m_player.scene();
+    const double pixelsPerUnit = m_board.params().boardWidth / scene.params().boardWidth;
+    const auto toPixels = [pixelsPerUnit](const QRectF &r) {
+        return QRectF(r.topLeft() * pixelsPerUnit, r.size() * pixelsPerUnit);
+    };
+    std::vector<OverlayBox> boxes;
+    boxes.push_back({toPixels(scene.usableArea()), "área útil", true});
+    for (const SceneElement &element : scene.elements())
+        boxes.push_back({toPixels(element.bounds), element.label, false});
+    m_canvas->setOverlay(boxes);
 }
 
 void MainWindow::openLesson()
