@@ -29,11 +29,13 @@ struct SceneParams {
     double connectGap = 0.8;        // folga entre a linha e a borda dos elementos ligados
 
     // --- Texto (comando "escrever") ---
-    QString fontPath = ":/fonts/rowmans.jhf"; // Hershey Roman Simplex (traço único)
+    QString fontPath = ":/fonts/rowmans.jhf"; // "fonte": "normal" — Hershey Roman Simplex (traço único)
+    QString cursiveFontPath = ":/fonts/scripts.jhf"; // "fonte": "cursiva" — Hershey Script Simplex
     double textDefaultSize = 4.0;   // "tamanho" padrão: altura das maiúsculas
     double scriptScale = 0.6;       // índices e expoentes: 60% do tamanho
     double superscriptRise = 0.45;  // o expoente sobe esta fração do tamanho
     double subscriptDrop = 0.25;    // o índice desce esta fração do tamanho
     double kerning = 2.0;           // aproximação dos pares da tabela (unidades da fonte)
     double tracking = -2.0;         // ajuste do espaço entre letras (unidades da fonte; < 0 aproxima)
+    double cursiveTracking = 0.0;   // na cursiva as letras se emendam nos próprios limites
 };

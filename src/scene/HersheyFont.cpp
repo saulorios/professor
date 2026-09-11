@@ -105,7 +105,7 @@ Polyline circle(const QPointF &center, double radius)
 
 } // namespace
 
-bool HersheyFont::load(const QString &path, QString *error)
+bool HersheyFont::load(const QString &path, QString *error, bool reorderStrokes)
 {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly)) {
@@ -158,7 +158,8 @@ bool HersheyFont::load(const QString &path, QString *error)
         if (stroke.size() >= 2)
             glyph.strokes.push_back(stroke);
 
-        normalizeStrokeOrder(glyph);
+        if (reorderStrokes)
+            normalizeStrokeOrder(glyph);
         m_glyphs.insert(QChar(char16_t(32 + index)), glyph);
         ++index;
     }

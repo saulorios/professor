@@ -63,8 +63,10 @@ private:
     SceneParams m_params;
     Geometry2D m_geometry;
     Layout m_layout;
-    HersheyFont m_font;
+    HersheyFont m_font;          // "fonte": "normal"
+    HersheyFont m_cursiveFont;   // "fonte": "cursiva"
     TextLayout m_textLayout;
+    TextLayout m_cursiveLayout;
     VirtualHand &m_hand;
     std::vector<SceneElement> m_elements; // na ordem em que foram desenhados
     bool m_waitingHand = false;

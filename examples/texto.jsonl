@@ -1,4 +1,4 @@
-{"tipo":"escrever","id":"titulo","texto":"Escrita à mão na lousa","tamanho":6.5,"ancora":"topo_centro"}
+{"tipo":"escrever","id":"titulo","texto":"Escrita à mão na lousa","tamanho":6.5,"fonte":"cursiva","ancora":"topo_centro"}
 {"tipo":"forma","forma":"linha","de":[28,14],"ate":[132,14],"pressao":"leve"}
 {"tipo":"fala","texto":"A mão também escreve, letra por letra, com acentos."}
 {"tipo":"escrever","id":"frase1","texto":"Ação e emoção: você põe açúcar no café.","tamanho":3.5,"em":[80,25]}

@@ -1,7 +1,7 @@
 # Fontes Hershey
 
 - `rowmans.jhf` — Roman Simplex: usada pelo comando `escrever`.
-- `scripts.jhf` — Script Simplex (cursiva): incluída para uso futuro.
+- `scripts.jhf` — Script Simplex (cursiva): usada com `"fonte": "cursiva"`.
 - `hershey.txt` — nota original da distribuição Usenet, com a restrição de uso.
   Ela precisa acompanhar os dados das fontes.
 

@@ -22,7 +22,9 @@ struct HersheyGlyph {
 class HersheyFont
 {
 public:
-    bool load(const QString &path, QString *error = nullptr);
+    // `reorderStrokes`: normaliza a ordem dos traços (letras de forma). A cursiva
+    // passa false e mantém a ordem original do desenho, que já é a da escrita.
+    bool load(const QString &path, QString *error = nullptr, bool reorderStrokes = true);
     bool isLoaded() const { return !m_glyphs.isEmpty(); }
 
     // Glifo do caractere, ou nullptr se a fonte não o tem nem sabe compô-lo

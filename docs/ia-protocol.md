@@ -57,6 +57,8 @@ Espera antes de continuar. Use após momentos importantes.
 {"tipo":"escrever","id":"titulo","texto":"Molécula de água","tamanho":6,"ancora":"topo_centro"}
 ```
 - `tamanho`: altura da letra em unidades (padrão 4).
+- `fonte`: `"normal"` (padrão) ou `"cursiva"`. Use cursiva só em títulos ou
+  destaques; fórmulas sempre em normal.
 - Índices: `H_2O` vira H₂O; expoentes: `x^2` vira x². Use `{}` para agrupar: `e^{-x}`.
 - Evite textos longos: lousa é para palavras-chave e fórmulas, a explicação vai na `fala`.
 

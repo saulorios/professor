@@ -186,10 +186,12 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 ## Texto (comando `escrever`)
 
 - Fontes Hershey de traço único em `resources/fonts/` (embutidas pelo `.qrc`):
-  `rowmans.jhf` (Roman Simplex, usada no texto) e `scripts.jhf` (Script Simplex,
-  cursiva, reservada para uso futuro). A nota de uso original (`hershey.txt`) e a
-  origem dos arquivos (`FONTES.md`) acompanham os dados. Nada de TTF: o giz risca,
-  não preenche contornos.
+  `rowmans.jhf` (Roman Simplex, `"fonte":"normal"`, padrão) e `scripts.jhf`
+  (Script Simplex, `"fonte":"cursiva"`, para títulos e destaques; fórmulas sempre
+  em normal). A cursiva mantém a ordem original dos traços (já é a da escrita),
+  usa `cursiveTracking` e não usa os pares de kerning da normal. A nota de uso
+  original (`hershey.txt`) e a origem dos arquivos (`FONTES.md`) acompanham os
+  dados. Nada de TTF: o giz risca, não preenche contornos.
 - `scene/HersheyFont`: lê o `.jhf` e converte cada caractere em polilinhas. Na
   carga, normaliza a ordem dos traços para a mão (de cima para baixo, da esquerda
   para a direita; traços abertos começam pela ponta de cima/esquerda). Letras

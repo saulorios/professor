@@ -34,6 +34,16 @@ double length(const QPointF &p)
     return std::hypot(p.x(), p.y());
 }
 
+// Parâmetros do texto em cursiva: espaçamento próprio e sem os pares de
+// kerning, que foram escolhidos para a fonte normal
+SceneParams cursiveParams(const SceneParams &params)
+{
+    SceneParams cursive = params;
+    cursive.tracking = params.cursiveTracking;
+    cursive.kerning = 0.0;
+    return cursive;
+}
+
 } // namespace
 
 Scene::Scene(VirtualHand &hand, const SceneParams &params, QObject *parent)
@@ -42,11 +52,14 @@ Scene::Scene(VirtualHand &hand, const SceneParams &params, QObject *parent)
     , m_geometry(params)
     , m_layout(params)
     , m_textLayout(m_font, params)
+    , m_cursiveLayout(m_cursiveFont, cursiveParams(params))
     , m_hand(hand)
 {
     QString error;
     if (!m_font.load(m_params.fontPath, &error))
         qWarning().noquote() << "Fonte Hershey não carregada:" << error;
+    if (!m_cursiveFont.load(m_params.cursiveFontPath, &error, false))
+        qWarning().noquote() << "Fonte cursiva não carregada:" << error;
 
     connect(&m_hand, &VirtualHand::finished, this, [this] {
         if (!m_waitingHand)
@@ -180,14 +193,19 @@ void Scene::writeText(const QJsonObject &command)
     const QString text = command.value("texto").toString();
     if (text.trimmed().isEmpty())
         return fail("escrever precisa de 'texto'");
-    if (!m_font.isLoaded())
-        return fail("escrever: fonte Hershey não carregada");
+    // "fonte": "normal" (padrão) ou "cursiva"
+    const QString fontName = command.value("fonte").toString("normal");
+    const bool cursive = fontName == "cursiva";
+    if (!cursive && fontName != "normal")
+        qWarning().noquote() << "Fonte desconhecida:" << fontName << "- usando normal";
+    if (!(cursive ? m_cursiveFont : m_font).isLoaded())
+        return fail(QString("escrever: fonte %1 não carregada").arg(cursive ? "cursiva" : "normal"));
     double size = m_params.textDefaultSize;
     if (command.contains("tamanho") && (!json::readNumber(command, "tamanho", &size) || size <= 0))
         return fail("escrever: 'tamanho' deve ser um número > 0");
 
     QString missing;
-    std::vector<Polyline> strokes = m_textLayout.layout(text, size, &missing);
+    std::vector<Polyline> strokes = (cursive ? m_cursiveLayout : m_textLayout).layout(text, size, &missing);
     if (!missing.isEmpty())
         qWarning().noquote() << "Caracteres sem glifo ignorados:" << missing;
     if (strokes.empty())
