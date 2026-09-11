@@ -55,7 +55,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(playerBar, &PlayerBar::restartClicked, &m_player, &LessonPlayer::restart);
     connect(playerBar, &PlayerBar::speedChanged, &m_player, &LessonPlayer::setSpeed);
 
-    setWindowTitle("Professor - Meu App");
+    setWindowTitle("Lousa Inteligente");
 
     // Intercepta cliques sobre as bordas em qualquer widget desta janela
     // (ex.: o botão fechar no canto superior direito)

@@ -170,6 +170,7 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - Não adicionar funcionalidades além do que foi pedido na etapa atual.
 - Ao terminar uma tarefa: compilar, rodar, corrigir erros e atualizar a seção
   "Estado atual" deste arquivo.
+- Ao concluir cada etapa com os testes passando, faça commit automaticamente.
 
 ## Como compilar
 
