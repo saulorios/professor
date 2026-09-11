@@ -6,6 +6,7 @@
 #include <QWidget>
 
 class QLabel;
+class QMenu;
 class QMenuBar;
 
 // Parâmetros ajustáveis da TitleBar (em pixels)
@@ -61,6 +62,9 @@ class TitleBar : public QWidget
 public:
     explicit TitleBar(QWidget *parent = nullptr);
 
+    // Menu "File", para a janela acrescentar suas ações
+    QMenu *fileMenu() const { return m_fileMenu; }
+
 public slots:
     void setTitle(const QString &title);
     void setMaximized(bool maximized);
@@ -80,6 +84,7 @@ private:
 
     QLabel *m_logo = nullptr;
     QMenuBar *m_menuBar = nullptr;
+    QMenu *m_fileMenu = nullptr;
     QLabel *m_titleLabel = nullptr;
     TitleBarButton *m_minimizeButton = nullptr;
     TitleBarButton *m_maximizeButton = nullptr;

@@ -1,16 +1,14 @@
 #pragma once
 
-#include "physics/BoardSurface.h"
-#include "physics/ChalkStick.h"
-#include "physics/DepositBuffer.h"
+#include "physics/Board.h"
 #include "physics/Eraser.h"
-#include "physics/PhysicsParams.h"
 #include "physics/StrokeEngine.h"
 
 #include <QColor>
 #include <QImage>
 #include <QWidget>
 
+class QLabel;
 class QTabletEvent;
 
 // Parâmetros ajustáveis da lousa na tela
@@ -32,14 +30,21 @@ class BoardCanvas : public QWidget
     Q_OBJECT
 
 public:
-    explicit BoardCanvas(QWidget *parent = nullptr);
+    explicit BoardCanvas(Board &board, QWidget *parent = nullptr);
 
 public slots:
     // Limpa a lousa e troca o giz por um novo
     void clear();
 
+    // Recalcula no cache apenas a região alterada da física e agenda o repaint dela
+    void refresh();
+
+    // Legenda na parte inferior da lousa; texto vazio esconde a legenda
+    void setCaption(const QString &text);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
@@ -61,18 +66,15 @@ private:
     void endTool();
 
     void buildBaseImage();
-    // Recalcula no cache apenas a região alterada da física e agenda o repaint dela
-    void flushDirty();
+    void updateCaptionGeometry();
 
     BoardCanvasParams m_params;
-    PhysicsParams m_physicsParams;
-    BoardSurface m_surface;
-    DepositBuffer m_deposit;
-    ChalkStick m_chalk;
-    StrokeEngine m_stroke;
+    Board &m_board;
+    StrokeEngine m_stroke; // traços do mouse / caneta
     Eraser m_eraser;
 
     QImage m_base;   // cor da lousa já variada pelo height map
     QImage m_image;  // cache exibido na tela
     Tool m_tool = Tool::None;
+    QLabel *m_caption = nullptr;
 };

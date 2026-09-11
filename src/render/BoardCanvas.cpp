@@ -1,5 +1,6 @@
 #include "BoardCanvas.h"
 
+#include <QLabel>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QShortcut>
@@ -24,19 +25,27 @@ int scaleChannel(int value, float k)
 
 } // namespace
 
-BoardCanvas::BoardCanvas(QWidget *parent)
+BoardCanvas::BoardCanvas(Board &board, QWidget *parent)
     : QWidget(parent)
-    , m_surface(m_physicsParams)
-    , m_deposit(m_physicsParams.boardWidth, m_physicsParams.boardHeight)
-    , m_chalk(m_physicsParams)
-    , m_stroke(m_physicsParams, m_surface, m_deposit, m_chalk)
-    , m_eraser(m_physicsParams, m_deposit)
+    , m_board(board)
+    , m_stroke(board.params, board.surface, board.deposit, board.chalk)
+    , m_eraser(board.params, board.deposit)
 {
     // O botão direito é o apagador: sem menu de contexto
     setContextMenuPolicy(Qt::PreventContextMenu);
 
     buildBaseImage();
     m_image = m_base.copy();
+    m_board.deposit.markDirty(m_board.deposit.bounds()); // compõe o que já estiver no depósito
+    refresh();
+
+    // Legenda (estilo no QSS, #Caption); não bloqueia o desenho por baixo dela
+    m_caption = new QLabel(this);
+    m_caption->setObjectName("Caption");
+    m_caption->setAlignment(Qt::AlignCenter);
+    m_caption->setWordWrap(true);
+    m_caption->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_caption->hide();
 
     // Atalho de teste: limpa a lousa
     auto *clearShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Delete), this);
@@ -45,9 +54,15 @@ BoardCanvas::BoardCanvas(QWidget *parent)
 
 void BoardCanvas::clear()
 {
-    m_deposit.clear();
-    m_chalk.reset();
-    flushDirty();
+    m_board.clear();
+    refresh();
+}
+
+void BoardCanvas::setCaption(const QString &text)
+{
+    m_caption->setText(text);
+    m_caption->setVisible(!text.isEmpty());
+    updateCaptionGeometry();
 }
 
 void BoardCanvas::paintEvent(QPaintEvent *)
@@ -56,6 +71,12 @@ void BoardCanvas::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     painter.drawImage(boardRect(), m_image);
+}
+
+void BoardCanvas::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    updateCaptionGeometry();
 }
 
 void BoardCanvas::mousePressEvent(QMouseEvent *event)
@@ -110,8 +131,8 @@ void BoardCanvas::tabletEvent(QTabletEvent *event)
 
 QRectF BoardCanvas::boardRect() const
 {
-    const qreal boardWidth = m_deposit.width();
-    const qreal boardHeight = m_deposit.height();
+    const qreal boardWidth = m_board.deposit.width();
+    const qreal boardHeight = m_board.deposit.height();
     const qreal scale = std::min(width() / boardWidth, height() / boardHeight);
     const QSizeF size(boardWidth * scale, boardHeight * scale);
     return QRectF(QPointF((width() - size.width()) / 2.0, (height() - size.height()) / 2.0), size);
@@ -120,14 +141,14 @@ QRectF BoardCanvas::boardRect() const
 QPointF BoardCanvas::toBoard(const QPointF &widgetPos) const
 {
     const QRectF board = boardRect();
-    const qreal scale = m_deposit.width() / board.width();
+    const qreal scale = m_board.deposit.width() / board.width();
     return (widgetPos - board.topLeft()) * scale;
 }
 
 QRect BoardCanvas::toWidget(const QRect &boardArea) const
 {
     const QRectF board = boardRect();
-    const qreal scale = board.width() / m_deposit.width();
+    const qreal scale = board.width() / m_board.deposit.width();
     const QRectF area(board.x() + boardArea.x() * scale, board.y() + boardArea.y() * scale,
                       boardArea.width() * scale, boardArea.height() * scale);
     // Margem de 1px para a suavização da escala
@@ -156,7 +177,7 @@ void BoardCanvas::beginTool(Tool tool, const ChalkSample &sample)
         m_stroke.begin(sample);
     else
         m_eraser.begin(sample);
-    flushDirty();
+    refresh();
 }
 
 void BoardCanvas::moveTool(const ChalkSample &sample)
@@ -165,7 +186,7 @@ void BoardCanvas::moveTool(const ChalkSample &sample)
         m_stroke.add(sample);
     else
         m_eraser.add(sample);
-    flushDirty();
+    refresh();
 }
 
 void BoardCanvas::endTool()
@@ -179,8 +200,8 @@ void BoardCanvas::endTool()
 
 void BoardCanvas::buildBaseImage()
 {
-    const int w = m_surface.width();
-    const int h = m_surface.height();
+    const int w = m_board.surface.width();
+    const int h = m_board.surface.height();
     const QColor &color = m_params.boardColor;
 
     m_base = QImage(w, h, QImage::Format_RGB32);
@@ -188,16 +209,16 @@ void BoardCanvas::buildBaseImage()
         auto *line = reinterpret_cast<QRgb *>(m_base.scanLine(y));
         for (int x = 0; x < w; ++x) {
             // Variação sutil de brilho conforme o relevo da superfície
-            const float k = 1.0f + m_params.boardVariation * (2.0f * m_surface.heightAt(x, y) - 1.0f);
+            const float k = 1.0f + m_params.boardVariation * (2.0f * m_board.surface.heightAt(x, y) - 1.0f);
             line[x] = qRgb(scaleChannel(color.red(), k), scaleChannel(color.green(), k),
                            scaleChannel(color.blue(), k));
         }
     }
 }
 
-void BoardCanvas::flushDirty()
+void BoardCanvas::refresh()
 {
-    const QRect dirty = m_deposit.takeDirty();
+    const QRect dirty = m_board.deposit.takeDirty();
     if (dirty.isEmpty())
         return;
 
@@ -209,7 +230,7 @@ void BoardCanvas::flushDirty()
     for (int y = dirty.top(); y <= dirty.bottom(); ++y) {
         const auto *base = reinterpret_cast<const QRgb *>(m_base.constScanLine(y));
         auto *out = reinterpret_cast<QRgb *>(m_image.scanLine(y));
-        const float *deposit = m_deposit.data() + m_deposit.index(0, y);
+        const float *deposit = m_board.deposit.data() + m_board.deposit.index(0, y);
 
         for (int x = dirty.left(); x <= dirty.right(); ++x) {
             // cor = mix(corLousa, corGiz, depósito)
@@ -221,4 +242,14 @@ void BoardCanvas::flushDirty()
     }
 
     update(toWidget(dirty));
+}
+
+void BoardCanvas::updateCaptionGeometry()
+{
+    if (!m_caption || !m_caption->isVisible())
+        return;
+    // Faixa na largura da lousa, encostada na borda inferior dela
+    const QRect board = boardRect().toRect();
+    const int h = m_caption->heightForWidth(board.width());
+    m_caption->setGeometry(board.left(), board.bottom() + 1 - h, board.width(), h);
 }

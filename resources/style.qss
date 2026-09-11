@@ -70,3 +70,63 @@ TitleBarButton#CloseButton {
 TitleBarButton#CloseButton:hover {
     background-color: #E81123;
 }
+
+/* Menus abertos a partir da topbar */
+QMenu {
+    background-color: #1F1F1F;
+    border: 1px solid #454545;
+    padding: 4px;
+    color: #CCCCCC;
+    font-size: 13px;
+}
+
+QMenu::item {
+    padding: 4px 24px;
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: #04395E;
+}
+
+/* Barra inferior do player: mesmo fundo, separada por uma linha de 1px */
+PlayerBar {
+    background-color: #1F1F1F;
+    border: none;
+    border-top: 1px solid #2B2B2B;
+}
+
+PlayerBar QPushButton {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 3px 10px;
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+PlayerBar QPushButton:hover {
+    background-color: #2A2D2E;
+}
+
+PlayerBar QPushButton:checked {
+    background-color: #37373D;
+    color: #FFFFFF;
+}
+
+PlayerBar QPushButton:disabled {
+    color: #6B6B6B;
+}
+
+PlayerBar QLabel {
+    color: #9D9D9D;
+    font-size: 12px;
+}
+
+/* Legenda da "fala": faixa semitransparente na parte inferior da lousa */
+#Caption {
+    background-color: rgba(0, 0, 0, 150);
+    color: #CCCCCC;
+    font-size: 16px;
+    padding: 8px 24px;
+}

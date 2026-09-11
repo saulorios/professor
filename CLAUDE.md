@@ -29,18 +29,19 @@ src/scene/     → layout (posições relativas, âncoras, ids), geometria 2D,
 src/hand/      → "mão do professor": converte polilinhas e texto (fontes Hershey)
                  em traços temporizados (posição, pressão, tempo)
    ▼
-src/physics/   → física do giz: BoardSurface, ChalkStick, DepositBuffer,
+src/physics/   → física do giz: Board, BoardSurface, ChalkStick, DepositBuffer,
                  StrokeEngine, Eraser
    ▼
 src/render/    → BoardCanvas: desenha o DepositBuffer na tela
-src/ui/        → MainWindow, TitleBar e demais widgets de interface
+src/ui/        → MainWindow, TitleBar, PlayerBar, LessonPlayer e demais widgets
 ```
 
 ### Regras de dependência (importante)
 
 - Cada camada só conhece a camada imediatamente abaixo dela.
+- No CMake cada camada é uma biblioteca estática que só enxerga a de baixo:
+  `protocol → scene → hand → physics`. `physics` só enxerga o QtCore.
 - `physics/` é C++ puro (sem QWidget; tipos Qt básicos como QPointF são permitidos).
-  No CMake ela é a biblioteca estática `physics`, que só enxerga o QtCore.
 - A física recebe SEMPRE o mesmo tipo de entrada, venha do mouse, da mesa
   digitalizadora ou da mão virtual:
 
@@ -64,13 +65,16 @@ struct ChalkSample {
 - A lousa lógica mede **160 × 90 unidades** (proporção 16:9), origem no canto
   superior esquerdo, Y para baixo.
 - Toda a IA e a camada `scene/` trabalham em unidades da lousa.
-- A conversão unidades → pixels acontece apenas na fronteira `hand/` → `physics/`.
+- A conversão unidades → pixels acontece apenas na fronteira `hand/` → `physics/`
+  (`HandParams::pixelsPerUnit`).
 - A lousa em pixels mede **1920 × 1080** (12 px por unidade), definida em
   `PhysicsParams`. A `BoardCanvas` exibe essa imagem em 16:9, escalada e
   centralizada no body; o resto do body fica com a cor da UI.
 
 ## Física do giz (`src/physics/`)
 
+- `Board`: estado compartilhado (superfície, depósito e giz). Mouse e mão virtual
+  escrevem no mesmo `Board`, cada um com o seu `StrokeEngine`/`Eraser`.
 - `PhysicsParams`: todas as constantes ajustáveis da física (lousa, superfície,
   giz, traço, apagador). `BoardCanvasParams` (em `render/`) guarda as da tela:
   pressão do mouse (0.6), faixa de inclinação da caneta e cores.
@@ -88,10 +92,41 @@ struct ChalkSample {
   espalha parte do resto para os vizinhos (fantasma). Uma nova passada começa a
   cada toque e quando o apagador inverte o sentido (vai e volta).
 - `DepositBuffer`: `std::vector<float>` por pixel com dirty rect; a `BoardCanvas`
-  recalcula e redesenha só essa região a cada evento.
+  recalcula e redesenha só essa região (`refresh()`).
 
 Controles na lousa: botão esquerdo (ou ponta da caneta) = giz; botão direito =
 apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes).
+
+## Aula a partir de arquivo `.jsonl` (sem IA e sem rede)
+
+Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHand` → física.
+`LessonPlayer` (em `ui/`) liga as peças; a `BoardCanvas` recompõe a cada tick da mão.
+
+- `protocol/CommandParser`: `appendData()` recebe pedaços (podem cortar linhas),
+  separa por linha e faz parse com `QJsonDocument`; linhas inválidas geram aviso
+  no log e são ignoradas. `finish()` processa a última linha sem `\n`.
+- `protocol/CommandQueue`: um comando por vez; só avança quando o anterior terminou
+  de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
+- Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
+  linha, seta, arco), `conectar`, `pausa`, `fala`, `apagar`, `limpar`. Os demais
+  geram aviso e são pulados.
+- Posicionamento suportado: `"em":[x,y]` e `"ancora"`. Os relativos ficam para a
+  Etapa 4 (sem eles, a forma vai para o centro com um aviso).
+- `scene/Scene`: elementos por id com bounding box; `conectar` liga as bordas
+  (elipse ou caixa) com uma folga. `scene/Geometry2D`: formas → polilinhas;
+  círculos/arcos com amostragem adaptativa (`curveTolerance`); tracejado e
+  pontilhado quebram as polilinhas. Constantes em `SceneParams`.
+- `hand/VirtualHand`: monta uma linha do tempo por comando e a reproduz num QTimer
+  de ~60 Hz: acelera no início, freia em curvas fechadas e no fim; pressão sobe
+  no toque e alivia ao levantar; tremor determinístico de 0.1–0.3 unidade;
+  pausa entre traços. `apagar` passa o `Eraser` em zigue-zague sobre a bounding
+  box; `limpar` zera a lousa de uma vez. Os timestamps enviados à física são do
+  tempo simulado da mão: a aparência não muda com a velocidade de reprodução.
+  Constantes em `HandParams`.
+- UI: `File > Abrir aula (.jsonl)...`; `PlayerBar` com Play / Pausar / Reiniciar
+  e velocidade (0.5x, 1x, 2x, 4x); a `fala` aparece como legenda (`#Caption`)
+  na parte inferior da lousa até a próxima fala.
+- Exemplo: `examples/formas.jsonl` exercita todos os comandos implementados.
 
 ## Paleta
 
@@ -131,7 +166,7 @@ Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 
 - [x] Etapa 0 — Janela com TitleBar customizada
 - [x] Etapa 1 — Física do giz com mouse
-- [ ] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
+- [x] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
 - [ ] Etapa 3 — Texto com fontes Hershey
 - [ ] Etapa 4 — Motor de layout
 - [ ] Etapa 5 — Objetos 3D em perspectiva

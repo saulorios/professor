@@ -108,8 +108,11 @@ TitleBar::TitleBar(QWidget *parent)
     m_menuBar->setNativeMenuBar(false); // mantém o menu dentro da janela (sem menu global do sistema)
     m_menuBar->setSizePolicy(QSizePolicy::Maximum, QSizePolicy::Fixed);
     const QStringList menus = {"File", "Edit", "Selection", "View", "Go", "Run", "Terminal", "Help"};
-    for (const QString &menu : menus)
-        m_menuBar->addMenu(menu);
+    for (const QString &menu : menus) {
+        QMenu *added = m_menuBar->addMenu(menu);
+        if (menu == "File")
+            m_fileMenu = added;
+    }
 
     // Título: fica fora do layout e é posicionado em updateTitleGeometry(),
     // para ficar centralizado em relação à janela inteira

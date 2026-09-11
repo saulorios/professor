@@ -23,8 +23,12 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Cada camada é uma biblioteca que só enxerga a camada logo abaixo:
+# protocol → scene → hand → physics
+
 # physics/: C++ puro, depende só do QtCore (QPointF, QRect) — nunca de QtWidgets
 add_library(physics STATIC
+    src/physics/Board.h
     src/physics/ChalkSample.h
     src/physics/PhysicsParams.h
     src/physics/Noise.h
@@ -42,15 +46,47 @@ add_library(physics STATIC
 target_include_directories(physics PUBLIC src)
 target_link_libraries(physics PUBLIC Qt6::Core)
 
+# hand/: mão virtual (polilinhas → ChalkSamples ao longo do tempo)
+add_library(hand STATIC
+    src/hand/Polyline.h
+    src/hand/HandParams.h
+    src/hand/VirtualHand.h
+    src/hand/VirtualHand.cpp
+)
+target_link_libraries(hand PUBLIC physics)
+
+# scene/: elementos por id, posicionamento e geometria 2D
+add_library(scene STATIC
+    src/scene/SceneParams.h
+    src/scene/Geometry2D.h
+    src/scene/Geometry2D.cpp
+    src/scene/Scene.h
+    src/scene/Scene.cpp
+)
+target_link_libraries(scene PUBLIC hand)
+
+# protocol/: parser de JSON Lines e fila de comandos
+add_library(protocol STATIC
+    src/protocol/CommandParser.h
+    src/protocol/CommandParser.cpp
+    src/protocol/CommandQueue.h
+    src/protocol/CommandQueue.cpp
+)
+target_link_libraries(protocol PUBLIC scene)
+
 add_executable(lousa
     src/main.cpp
     src/render/BoardCanvas.h
     src/render/BoardCanvas.cpp
+    src/ui/LessonPlayer.h
+    src/ui/LessonPlayer.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
+    src/ui/PlayerBar.h
+    src/ui/PlayerBar.cpp
     src/ui/TitleBar.h
     src/ui/TitleBar.cpp
     resources/resources.qrc
 )
 
-target_link_libraries(lousa PRIVATE physics Qt6::Widgets)
+target_link_libraries(lousa PRIVATE protocol Qt6::Widgets)

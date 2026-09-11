@@ -1,5 +1,8 @@
 #pragma once
 
+#include "LessonPlayer.h"
+#include "physics/Board.h"
+
 #include <QMainWindow>
 #include <QSize>
 
@@ -12,8 +15,8 @@ struct MainWindowParams {
     int resizeMargin = 5; // largura (px) da faixa junto às bordas que permite redimensionar
 };
 
-// Janela principal sem moldura nativa: TitleBar customizada + body com a lousa.
-// O redimensionamento pelas bordas é feito com QWindow::startSystemResize.
+// Janela principal sem moldura nativa: TitleBar customizada + body com a lousa
+// e a barra do player. O redimensionamento pelas bordas usa QWindow::startSystemResize.
 class MainWindow : public QMainWindow
 {
     Q_OBJECT
@@ -27,11 +30,15 @@ protected:
     void changeEvent(QEvent *event) override;
 
 private:
+    void openLesson();
+
     // Bordas da janela sob a posição informada (em coordenadas locais)
     Qt::Edges edgesAt(const QPoint &pos) const;
     void updateCursorShape(Qt::Edges edges);
 
     MainWindowParams m_params;
+    Board m_board;          // estado físico compartilhado por mouse e mão virtual
+    LessonPlayer m_player;
     TitleBar *m_titleBar = nullptr;
     QWidget *m_body = nullptr;
     Qt::Edges m_cursorEdges; // bordas refletidas no cursor atual

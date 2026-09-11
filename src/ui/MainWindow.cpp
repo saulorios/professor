@@ -1,15 +1,20 @@
 #include "MainWindow.h"
+#include "PlayerBar.h"
 #include "TitleBar.h"
 #include "render/BoardCanvas.h"
 
 #include <QApplication>
+#include <QFileDialog>
 #include <QHoverEvent>
+#include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QVBoxLayout>
 #include <QWindow>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
+    , m_player(m_board)
 {
     // Remove a moldura nativa do sistema
     setWindowFlags(windowFlags() | Qt::FramelessWindowHint);
@@ -25,21 +30,47 @@ MainWindow::MainWindow(QWidget *parent)
     m_titleBar = new TitleBar(this);
     setMenuWidget(m_titleBar);
     connect(this, &QWidget::windowTitleChanged, m_titleBar, &TitleBar::setTitle);
+    m_titleBar->fileMenu()->addAction("Abrir aula (.jsonl)...", this, &MainWindow::openLesson);
 
-    // Body: ocupado inteiro pela lousa
+    // Body: lousa ocupando o espaço e a barra do player embaixo
     m_body = new QWidget(this);
     m_body->setObjectName("Body");
+    auto *canvas = new BoardCanvas(m_board, m_body);
+    auto *playerBar = new PlayerBar(m_body);
     auto *bodyLayout = new QVBoxLayout(m_body);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
     bodyLayout->setSpacing(0);
-    bodyLayout->addWidget(new BoardCanvas(m_body));
+    bodyLayout->addWidget(canvas, 1);
+    bodyLayout->addWidget(playerBar);
     setCentralWidget(m_body);
+
+    // Aula: a mão desenha no mesmo Board; a lousa só recompõe a região alterada
+    connect(&m_player, &LessonPlayer::boardChanged, canvas, &BoardCanvas::refresh);
+    connect(&m_player, &LessonPlayer::speech, canvas, &BoardCanvas::setCaption);
+    connect(&m_player, &LessonPlayer::stateChanged, playerBar, [this, playerBar] {
+        playerBar->setState(m_player.isLoaded(), m_player.isPlaying());
+    });
+    connect(playerBar, &PlayerBar::playClicked, &m_player, &LessonPlayer::play);
+    connect(playerBar, &PlayerBar::pauseClicked, &m_player, &LessonPlayer::pause);
+    connect(playerBar, &PlayerBar::restartClicked, &m_player, &LessonPlayer::restart);
+    connect(playerBar, &PlayerBar::speedChanged, &m_player, &LessonPlayer::setSpeed);
 
     setWindowTitle("Professor - Meu App");
 
     // Intercepta cliques sobre as bordas em qualquer widget desta janela
     // (ex.: o botão fechar no canto superior direito)
     qApp->installEventFilter(this);
+}
+
+void MainWindow::openLesson()
+{
+    const QString path = QFileDialog::getOpenFileName(this, "Abrir aula", QString(),
+                                                      "Aulas (*.jsonl);;Todos os arquivos (*)");
+    if (path.isEmpty())
+        return;
+    QString error;
+    if (!m_player.open(path, &error))
+        QMessageBox::warning(this, "Abrir aula", error);
 }
 
 bool MainWindow::event(QEvent *event)
