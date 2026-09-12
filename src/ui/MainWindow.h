@@ -9,6 +9,7 @@
 #include <QSize>
 
 class AgentPanel;
+class HandwritingRecorder;
 class BoardCanvas;
 class LessonEditor;
 class QAction;
@@ -78,6 +79,7 @@ private:
     QSplitter *m_splitter = nullptr;
     QPlainTextEdit *m_log = nullptr;
     LessonEditor *m_editor = nullptr;
+    HandwritingRecorder *m_handwriting = nullptr;
     QAction *m_showChalk = nullptr;
     QAction *m_record = nullptr;
     QAction *m_showPanel = nullptr;

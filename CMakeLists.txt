@@ -15,6 +15,9 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets)
+find_package(Qt6 OPTIONAL_COMPONENTS Test)
+
+option(LOUSA_BUILD_TESTS "Compila os testes (precisa do Qt6::Test)" ON)
 
 # Avisos do compilador ativados em todos os alvos; no MSVC, fontes lidos como UTF-8
 if(MSVC)
@@ -88,6 +91,28 @@ add_library(scene STATIC
 )
 target_link_libraries(scene PUBLIC hand Qt6::Gui)
 
+# handwriting/: banco de gestos de escrita manual (glifos capturados, strokes com
+# tempo) e o contrato da WritingTrajectory. Independente da lousa, do giz e da
+# mão: só enxerga o QtCore. Quem o consome fica acima (ui/ hoje; scene/ e o
+# HumanMotionEngine nas próximas etapas).
+add_library(handwriting STATIC
+    src/handwriting/HandwritingParams.h
+    src/handwriting/types/HandwritingTypes.h
+    src/handwriting/types/WritingTrajectory.h
+    src/handwriting/data/GlyphGeometry.h
+    src/handwriting/data/GlyphGeometry.cpp
+    src/handwriting/data/GlyphSerializer.h
+    src/handwriting/data/GlyphSerializer.cpp
+    src/handwriting/data/GlyphDatabase.h
+    src/handwriting/data/GlyphDatabase.cpp
+    src/handwriting/recorder/StrokeRecorder.h
+    src/handwriting/recorder/StrokeRecorder.cpp
+    src/handwriting/engine/HandwritingEngine.h
+    src/handwriting/engine/HandwritingEngine.cpp
+)
+target_include_directories(handwriting PUBLIC src)
+target_link_libraries(handwriting PUBLIC Qt6::Core)
+
 # protocol/: parser de JSON Lines, fila de comandos e cliente da IA
 # (QtNetwork entra por causa do QNetworkAccessManager do AiClient)
 add_library(protocol STATIC
@@ -108,6 +133,10 @@ add_executable(lousa
     src/render/ChalkOverlay.cpp
     src/ui/AgentPanel.h
     src/ui/AgentPanel.cpp
+    src/ui/HandwritingCapture.h
+    src/ui/HandwritingCapture.cpp
+    src/ui/HandwritingRecorder.h
+    src/ui/HandwritingRecorder.cpp
     src/ui/LessonEditor.h
     src/ui/LessonEditor.cpp
     src/ui/LessonPlayer.h
@@ -125,4 +154,12 @@ add_executable(lousa
     resources/resources.qrc
 )
 
-target_link_libraries(lousa PRIVATE protocol Qt6::Widgets)
+target_link_libraries(lousa PRIVATE protocol handwriting Qt6::Widgets)
+
+# Testes (ctest --test-dir build)
+if(LOUSA_BUILD_TESTS AND TARGET Qt6::Test)
+    enable_testing()
+    add_executable(handwriting_tests tests/handwriting/tst_handwriting.cpp)
+    target_link_libraries(handwriting_tests PRIVATE handwriting Qt6::Test)
+    add_test(NAME handwriting COMMAND handwriting_tests)
+endif()

@@ -127,8 +127,9 @@ Dois conceitos distintos:
   recalcula e redesenha só essa região (`refresh()`).
 
 Controles na lousa: botão esquerdo (ou ponta da caneta) = giz; botão direito =
-apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes); F9 = editor da
-aula; F10 = painel de ajuste; F12 = modo de depuração do layout.
+apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes); F7 = gravador
+de escrita manual; F9 = editor da aula; F10 = painel de ajuste; F12 = modo de
+depuração do layout.
 
 ## Painel de ajuste (F10)
 
@@ -449,6 +450,49 @@ nem re-renderização: depois de desenhado é giz como qualquer outro.
   outra cor (mesmo com `omitir`), os pontos de fuga e as linhas finas até eles.
 - Constantes em `SceneParams` (bloco "Objetos 3D").
 
+## Escrita manual (`src/handwriting/`, etapa 1: banco de gestos)
+
+Base para trocar a escrita por fonte por gestos capturados. Pipeline futuro:
+`texto → HandwritingEngine → WritingTrajectory → HumanMotionEngine → mão → giz → lousa`.
+Esta etapa tem só o banco, o gravador e o contrato da trajetória; mão, braço,
+pulso, IK e variação **não** existem ainda. O Hershey continua sendo a fonte do
+`escrever` (e será o fallback).
+
+- Biblioteca `handwriting` (CMake), **independente**: só enxerga o QtCore, não
+  conhece giz, cena nem mão. `lousa` a usa pelo gravador; `scene/` e o
+  HumanMotionEngine vão consumi-la nas próximas etapas.
+- `types/HandwritingTypes.h`: `WritingPoint` (pos, t relativo ao stroke,
+  pressão/inclinação ou `kUnknown`, velocidade derivada), `Stroke` (id = ordem,
+  `startMs` relativo ao glifo, `points` normalizados e `rawPoints` em px, nunca
+  suavizados), `GlyphVariant`, `Glyph`, `GlyphMetrics`, `CaptureInfo` e
+  `WritingProfile` (só contrato). Todo stroke é pen down; pen up é o intervalo
+  entre strokes.
+- Espaço do glifo: 1 = altura da guia (linha de base → maiúsculas), Y para
+  baixo, **linha de base em y = 0**, x = 0 na borda esquerda.
+  `points = (raw − originPx) / unitPx`: independe da resolução.
+- `data/GlyphGeometry`: medidas sempre derivadas dos pontos (caixa, início,
+  fim, comprimento, duração, direção e direção de entrada, tempo de giz
+  encostado/levantado). `data/GlyphSerializer`: JSON com `schemaVersion`
+  (formato em `docs/handwriting-format.md`). `data/GlyphDatabase`: pasta por
+  código Unicode, ids `A01`, `a01`, `U00E701`; o próximo número olha memória e
+  disco, e a gravação usa abertura exclusiva (nunca sobrescreve).
+- `recorder/StrokeRecorder`: pointerDown/Move/Up → strokes, desfazer, limpar,
+  `build()` da variante. `engine/HandwritingEngine`: `appendGlyph` com
+  `GlyphPlacement` (escala, rotação, baseline, velocidade, pressão — sem tocar
+  na variante) e `generate(texto)` numa linha, variante escolhida pela seed.
+  `types/WritingTrajectory.h`: pontos (pos, t, pressão, velocidade, direção),
+  segmentos `Down`/`Up` e caixas dos glifos, em unidades da lousa.
+- `ui/HandwritingRecorder` (File > "Gravador de escrita manual...", F7): campo
+  do caractere e atalhos A E I O U M N R S, área com guias
+  (`ui/HandwritingCapture`: mouse, caneta com pressão/inclinação e toque, com o
+  timestamp do evento), Limpar (Delete), Desfazer (Ctrl+Z), Salvar variante
+  (Ctrl+S), "Mostrar trajetória" (número, cor e seta por stroke, giz levantado
+  pontilhado) e "Mostrar pontos"; lista das variantes (clicar carrega) e
+  detalhes com caixa, timestamps, ordem e pen up/down. Enquanto a janela está
+  aberta a compressão de eventos do mouse fica desligada. Banco em
+  `<pasta do executável>/handwriting` ou `LOUSA_ESCRITA`.
+- Testes: `tests/handwriting/tst_handwriting.cpp` (QtTest), `ctest --test-dir build`.
+
 ## Paleta
 
 - UI (topbar e body): fundo `#1F1F1F`, separador `#2B2B2B`, texto `#CCCCCC`.
@@ -476,6 +520,7 @@ cmake --build build -j
 ```
 
 Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
+Os testes (se o Qt6::Test estiver instalado) rodam com `ctest --test-dir build`.
 
 Para a aula com IA, rode antes o proxy (a chave fica só nele):
 
@@ -492,6 +537,7 @@ cp .env.exemplo .env    # provedor, chave e modelo (ou exporte no terminal)
   dos comandos JSON Lines. É a fonte da verdade do protocolo: o parser deve
   aceitar exatamente o que está descrito lá.
 - `examples/*.jsonl` — aulas escritas à mão para testar o motor sem usar a IA.
+- `docs/handwriting-format.md` — formato do banco de escrita manual.
 
 ## Estado atual
 
@@ -503,3 +549,5 @@ cp .env.exemplo .env    # provedor, chave e modelo (ou exporte no terminal)
 - [x] Etapa 5 — Objetos 3D em perspectiva
 - [x] Etapa 6 — Cliente de rede e IA
 - [ ] Etapa 7 — Renderização em OpenGL (opcional)
+- [x] Escrita manual 1 — Banco de gestos, gravador (F7) e contrato da WritingTrajectory
+- [ ] Escrita manual 2 — HandwritingEngine com variação + HumanMotionEngine

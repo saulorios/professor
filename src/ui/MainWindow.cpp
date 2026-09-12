@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AgentPanel.h"
+#include "HandwritingRecorder.h"
 #include "LessonEditor.h"
 #include "PlayerBar.h"
 #include "TitleBar.h"
@@ -47,6 +48,15 @@ MainWindow::MainWindow(QWidget *parent)
     m_record->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
     m_titleBar->fileMenu()->addAction("Salvar aula (.jsonl)...", this, &MainWindow::saveLesson)
         ->setShortcut(QKeySequence::Save);
+    // Gravador de escrita manual (F7): janela própria, criada na primeira vez
+    m_titleBar->fileMenu()->addSeparator();
+    m_titleBar->fileMenu()->addAction("Gravador de escrita manual...", this, [this] {
+        if (!m_handwriting)
+            m_handwriting = new HandwritingRecorder(this);
+        m_handwriting->show();
+        m_handwriting->raise();
+        m_handwriting->activateWindow();
+    })->setShortcut(QKeySequence(Qt::Key_F7));
 
     // Body: lousa com o painel de ajuste (oculto) à direita e a barra do player embaixo
     m_body = new QWidget(this);
