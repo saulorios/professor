@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ChalkPose.h"
 #include "HandParams.h"
 #include "Polyline.h"
 #include "physics/Eraser.h"
@@ -20,6 +21,24 @@ enum class PressureLevel { Light, Normal, Strong };
 
 // Tipo de movimento: formas ou escrita (a escrita é um pouco mais rápida)
 enum class Motion { Shape, Writing };
+
+// Um traço com o seu próprio ritmo: usado pela escrita humanizada (cada letra
+// sai um pouco mais rápida ou mais leve) e pelas arestas ocultas dos objetos 3D
+struct HandStroke {
+    Polyline points;
+    PressureLevel pressure = PressureLevel::Normal;
+    double speedScale = 1.0;      // 1 = a velocidade normal do movimento
+    double pressureScale = 1.0;   // multiplica a pressão base
+    double pauseBeforeMs = 0.0;   // micro-pausa antes deste traço
+};
+
+// Amostra de um traço gravado (comando "traco_livre"): posição em unidades da
+// lousa, pressão e o instante em que foi feita, contado do início do traço
+struct RecordedPoint {
+    QPointF pos;
+    float pressure = 0.6f;
+    double timeMs = 0.0;
+};
 
 // "Mão do professor": recebe polilinhas já posicionadas (unidades da lousa) e
 // as reproduz ao longo do tempo como ChalkSamples, imitando uma mão humana:
@@ -42,6 +61,13 @@ public:
     void draw(const std::vector<Polyline> &strokes, const std::vector<PressureLevel> &pressures,
               Motion motion = Motion::Shape);
 
+    // Cada traço com o seu ritmo (escrita humanizada)
+    void draw(const std::vector<HandStroke> &strokes, Motion motion = Motion::Shape);
+
+    // Refaz um traço gravado com o tempo e a pressão originais: sem perfil de
+    // velocidade, sem tremor, sem reamostragem
+    void drawRecorded(const std::vector<RecordedPoint> &points);
+
     // Passa o apagador em zigue-zague sobre a área
     void erase(const QRectF &area);
 
@@ -63,6 +89,8 @@ public:
 signals:
     void finished();      // o trabalho atual terminou de ser desenhado
     void boardChanged();  // o depósito de giz foi alterado
+    void chalkMoved(const ChalkPose &pose); // onde desenhar o giz na tela
+    void chalkHidden();                     // a mão saiu de cena (fim, pausa ou apagador)
 
 private:
     enum class Tool { Chalk, Eraser };
@@ -83,6 +111,7 @@ private:
     void resample(const Polyline &units);
     void deliver(const TimedSample &sample);
     void tick();
+    void publishPose();
 
     HandParams m_params;
     Board &m_board;
@@ -107,6 +136,8 @@ private:
     double m_jobStart = 0.0;      // tempo simulado absoluto do início do trabalho
     double m_simTime = 0.0;       // tempo simulado acumulado da mão
     bool m_strokeOpen = false;
+    double m_heading = 0.0;       // direção suavizada do giz na tela (radianos)
+    bool m_headingReady = false;  // o primeiro traço não interpola: já nasce na direção certa
     int m_strokeCounter = 0;      // semente do tremor de cada traço
     QPointF m_handPos;            // última posição da mão (unidades)
 

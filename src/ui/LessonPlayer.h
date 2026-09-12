@@ -23,6 +23,15 @@ public:
 
     // Carrega a aula e começa a reproduzir; em erro de leitura devolve false e a mensagem
     bool open(const QString &path, QString *error);
+    bool save(const QString &path, QString *error) const;
+
+    // A aula inteira em JSON Lines, para o editor
+    QString lessonText() const;
+    // Valida o texto e, se estiver todo certo, reproduz; senão devolve false e
+    // a lista de erros ("linha N: ..."), sem mexer na aula atual
+    bool applyText(const QString &text, QStringList *errors);
+    // Acrescenta um comando à aula sem desenhá-lo (usado pelo gravador de traços)
+    void appendCommand(const QJsonObject &command);
 
     // Aula que chega aos poucos (da IA). `clearBoard` false continua a aula
     // atual, mantendo o que já está na lousa (resposta a "fim_passo").
@@ -40,6 +49,10 @@ public:
     void setHandParams(const HandParams &params) { m_hand.setParams(params); }
     const HandParams &handParams() const { return m_hand.params(); }
 
+    // Humanização da escrita (vale a partir do próximo texto)
+    void setHumanizerParams(const HumanizerParams &params) { m_scene.setHumanizerParams(params); }
+    const HumanizerParams &humanizerParams() const { return m_scene.humanizerParams(); }
+
     // Cena da aula (elementos desenhados, área útil), para o modo de depuração
     const Scene &scene() const { return m_scene; }
 
@@ -52,6 +65,8 @@ signals:
     void stateChanged();
     void commandReceived(const QJsonObject &command); // para o log da aula
     void stepFinished();               // a IA terminou um passo e espera
+    void chalkMoved(const ChalkPose &pose); // giz visível na tela
+    void chalkHidden();
 
 private:
     void startFromBeginning();

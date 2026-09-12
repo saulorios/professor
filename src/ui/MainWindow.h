@@ -1,6 +1,7 @@
 #pragma once
 
 #include "LessonPlayer.h"
+#include "LessonRecorder.h"
 #include "physics/Board.h"
 #include "protocol/AiClient.h"
 
@@ -9,6 +10,8 @@
 
 class AskBar;
 class BoardCanvas;
+class LessonEditor;
+class QAction;
 class QPlainTextEdit;
 class TitleBar;
 class TuningPanel;
@@ -40,6 +43,9 @@ protected:
 
 private:
     void openLesson();
+    void saveLesson();
+    void toggleRecording();
+    void applyEditor();
 
     // Aula vinda da IA (pelo proxy) e log dos comandos recebidos
     void askAi(const QString &question);
@@ -62,10 +68,14 @@ private:
     MainWindowParams m_params;
     Board m_board;          // estado físico compartilhado por mouse e mão virtual
     LessonPlayer m_player;
+    LessonRecorder m_recorder;
     AiClient m_ai;
     TitleBar *m_titleBar = nullptr;
     AskBar *m_askBar = nullptr;
     QPlainTextEdit *m_log = nullptr;
+    LessonEditor *m_editor = nullptr;
+    QAction *m_showChalk = nullptr;
+    QAction *m_record = nullptr;
     int m_streamCommands = 0; // comandos recebidos na resposta atual
     QWidget *m_body = nullptr;
     BoardCanvas *m_canvas = nullptr;

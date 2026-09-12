@@ -30,6 +30,22 @@ void translate(std::vector<Polyline> &lines, const QPointF &offset)
             p += offset;
 }
 
+void translate(std::vector<HandStroke> &strokes, const QPointF &offset)
+{
+    for (HandStroke &stroke : strokes)
+        for (QPointF &p : stroke.points)
+            p += offset;
+}
+
+std::vector<Polyline> polylinesOf(const std::vector<HandStroke> &strokes)
+{
+    std::vector<Polyline> lines;
+    lines.reserve(strokes.size());
+    for (const HandStroke &stroke : strokes)
+        lines.push_back(stroke.points);
+    return lines;
+}
+
 double length(const QPointF &p)
 {
     return std::hypot(p.x(), p.y());
@@ -111,6 +127,8 @@ void Scene::execute(const QJsonObject &command)
         connectElements(command);
     else if (type == "destacar")
         highlight(command);
+    else if (type == "traco_livre")
+        drawFreeStroke(command);
     else if (type == "objeto_3d")
         drawObject(command);
     else if (type == "rotular")
@@ -240,6 +258,18 @@ void Scene::drawShape(const QJsonObject &command)
     submit(command, lines, solid);
 }
 
+std::vector<HandStroke> Scene::writing(const QString &text, double size, bool cursive,
+                                       PressureLevel pressure) const
+{
+    QString missing;
+    std::vector<GlyphRun> runs;
+    const std::vector<Polyline> raw =
+        (cursive ? m_cursiveLayout : m_textLayout).layout(text, size, &missing, &runs);
+    if (!missing.isEmpty())
+        qWarning().noquote() << "Caracteres sem glifo ignorados:" << missing;
+    return m_humanizer.apply(raw, runs, pressure, cursive);
+}
+
 void Scene::writeText(const QJsonObject &command)
 {
     const QString text = command.value("texto").toString();
@@ -256,25 +286,22 @@ void Scene::writeText(const QJsonObject &command)
     if (command.contains("tamanho") && (!json::readNumber(command, "tamanho", &size) || size <= 0))
         return fail("escrever: 'tamanho' deve ser um número > 0");
 
-    QString missing;
-    std::vector<Polyline> strokes = (cursive ? m_cursiveLayout : m_textLayout).layout(text, size, &missing);
-    if (!missing.isEmpty())
-        qWarning().noquote() << "Caracteres sem glifo ignorados:" << missing;
+    std::vector<HandStroke> strokes = writing(text, size, cursive, pressureLevel(command));
     if (strokes.empty())
         return fail("escrever: nenhum caractere desenhável");
 
     // O ponto de referência do texto é o seu centro; a ordem dos traços
     // (letra por letra) é preservada até a mão
-    const QRectF local = Geometry2D::bounds(strokes);
+    const QRectF local = Geometry2D::bounds(polylinesOf(strokes));
     const QPointF offset = m_layout.place(command, local, local.center(), m_elements);
     translate(strokes, offset);
 
     SceneElement element;
-    element.bounds = Geometry2D::bounds(strokes);
+    element.bounds = Geometry2D::bounds(polylinesOf(strokes));
     element.anchor = local.center() + offset;
     store(command, element, QString("\"%1\"").arg(text));
     m_waitingHand = true;
-    m_hand.draw(strokes, pressureLevel(command), Motion::Writing);
+    m_hand.draw(strokes, Motion::Writing);
 }
 
 void Scene::connectElements(const QJsonObject &command)
@@ -344,6 +371,44 @@ void Scene::highlight(const QJsonObject &command)
     submit(command, lines);
 }
 
+void Scene::drawFreeStroke(const QJsonObject &command)
+{
+    // Traço gravado do mouse ou da caneta: [x, y, pressão] e, opcionalmente, o
+    // instante em segundos. Já vem em unidades da lousa, sem passar pelo layout.
+    const QJsonArray points = command.value("pontos").toArray();
+    std::vector<RecordedPoint> recorded;
+    Polyline line;
+    double previousTime = 0.0;
+    for (const QJsonValue &value : points) {
+        const QJsonArray point = value.toArray();
+        if (point.size() < 2)
+            return fail("traco_livre: cada ponto é [x, y] ou [x, y, pressao] ou [x, y, pressao, t]");
+        RecordedPoint sample;
+        sample.pos = QPointF(point[0].toDouble(), point[1].toDouble());
+        if (point.size() > 2)
+            sample.pressure = float(std::clamp(point[2].toDouble(0.6), 0.0, 1.0));
+        // Sem tempo gravado, o traço sai na velocidade de escrita da mão
+        previousTime = point.size() > 3 ? point[3].toDouble() * 1000.0
+                                        : previousTime + (recorded.empty()
+                                                              ? 0.0
+                                                              : length(sample.pos - recorded.back().pos)
+                                                                    / m_hand.params().writingSpeed * 1000.0);
+        sample.timeMs = previousTime;
+        recorded.push_back(sample);
+        line.push_back(sample.pos);
+    }
+    if (recorded.size() < 2)
+        return fail("traco_livre precisa de pelo menos 2 pontos");
+
+    SceneElement element;
+    element.bounds = Geometry2D::bounds({line});
+    element.anchor = element.bounds.center();
+    element.obstacle = false; // um rabisco não ocupa a sua bounding box inteira
+    store(command, element, "traço livre");
+    m_waitingHand = true;
+    m_hand.drawRecorded(recorded);
+}
+
 void Scene::drawObject(const QJsonObject &command)
 {
     std::vector<ObjectStroke> strokes;
@@ -397,7 +462,7 @@ void Scene::labelVertex(const QJsonObject &command)
     const QString text = command.value("texto").toString();
     if (text.trimmed().isEmpty())
         return fail("rotular precisa de 'texto'");
-    std::vector<Polyline> strokes = m_textLayout.layout(text, m_params.labelSize);
+    std::vector<HandStroke> strokes = writing(text, m_params.labelSize, false, pressureLevel(command));
     if (strokes.empty())
         return fail("rotular: nenhum caractere desenhável");
 
@@ -405,7 +470,7 @@ void Scene::labelVertex(const QJsonObject &command)
     QPointF direction = found->at - centroid(object->hull);
     const double len = length(direction);
     direction = len > 0.0 ? direction / len : QPointF(0.0, -1.0);
-    const QRectF local = Geometry2D::bounds(strokes);
+    const QRectF local = Geometry2D::bounds(polylinesOf(strokes));
     const double reach = std::abs(direction.x()) * local.width() / 2 + std::abs(direction.y()) * local.height() / 2;
     // Vértices no meio do desenho (como a quina mais próxima de um cubo) exigem
     // sair da silhueta antes de afastar o texto
@@ -418,11 +483,11 @@ void Scene::labelVertex(const QJsonObject &command)
     translate(strokes, offset);
 
     SceneElement element;
-    element.bounds = Geometry2D::bounds(strokes);
+    element.bounds = Geometry2D::bounds(polylinesOf(strokes));
     element.anchor = element.bounds.center();
     store(command, element, QString("rótulo \"%1\"").arg(text));
     m_waitingHand = true;
-    m_hand.draw(strokes, pressureLevel(command), Motion::Writing);
+    m_hand.draw(strokes, Motion::Writing);
 }
 
 void Scene::dimensionEdge(const QJsonObject &command)
@@ -483,21 +548,25 @@ void Scene::dimensionEdge(const QJsonObject &command)
     // Texto no meio da cota, do lado de fora
     const QString text = command.contains("texto") ? command.value("texto").toString()
                                                    : QString::number(chosen->length3D, 'g', 3);
-    std::vector<Polyline> label = m_textLayout.layout(text, m_params.dimensionTextSize);
+    std::vector<HandStroke> strokes;
+    for (const Polyline &line : lines)
+        strokes.push_back({line, pressureLevel(command), 1.0, 1.0, 0.0});
+
+    std::vector<HandStroke> label = writing(text, m_params.dimensionTextSize, false, pressureLevel(command));
     if (!label.empty()) {
-        const QRectF local = Geometry2D::bounds(label);
+        const QRectF local = Geometry2D::bounds(polylinesOf(label));
         const double reach = std::abs(normal.x()) * local.width() / 2 + std::abs(normal.y()) * local.height() / 2;
         const QPointF at = middle + shift + normal * (m_params.dimensionTextGap + reach);
         translate(label, at - local.center());
-        lines.insert(lines.end(), label.begin(), label.end());
+        strokes.insert(strokes.end(), label.begin(), label.end());
     }
 
     SceneElement element;
-    element.bounds = Geometry2D::bounds(lines);
+    element.bounds = Geometry2D::bounds(polylinesOf(strokes));
     element.anchor = element.bounds.center();
     store(command, element, QString("cota \"%1\"").arg(text));
     m_waitingHand = true;
-    m_hand.draw(lines, pressureLevel(command));
+    m_hand.draw(strokes);
 }
 
 const Object3DInfo *Scene::findObject(const QString &id) const

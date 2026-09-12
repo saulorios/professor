@@ -199,6 +199,66 @@ AskBar QPushButton#AskButton:disabled {
     font-size: 12px;
 }
 
+/* Editor da aula (F9) */
+LessonEditor {
+    background-color: #1F1F1F;
+    border: none;
+    border-top: 1px solid #2B2B2B;
+}
+
+#LessonText {
+    background-color: #252526;
+    border: 1px solid #2B2B2B;
+    border-radius: 6px;
+    padding: 4px 6px;
+    color: #CCCCCC;
+    font-family: "Ubuntu Mono", "Cascadia Mono", monospace;
+    font-size: 12px;
+    selection-background-color: #04395E;
+}
+
+LessonEditor QPushButton {
+    background: transparent;
+    border: 1px solid #2B2B2B;
+    border-radius: 6px;
+    padding: 5px 12px;
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+LessonEditor QPushButton:hover {
+    background-color: #2A2D2E;
+}
+
+LessonEditor QPushButton#AskButton {
+    background-color: #0078D4;
+    border-color: #0078D4;
+    color: #FFFFFF;
+}
+
+LessonEditor QPushButton#AskButton:hover {
+    background-color: #1A86D9;
+}
+
+#LessonStatus {
+    background: transparent;
+    color: #9D9D9D;
+    font-size: 11px;
+}
+
+#LessonStatus[erro="true"] {
+    color: #F48771;
+}
+
+/* Indicador de gravação, no canto da lousa */
+#RecordingBadge {
+    background-color: rgba(0, 0, 0, 140);
+    border-radius: 4px;
+    padding: 3px 8px;
+    color: #F48771;
+    font-size: 12px;
+}
+
 /* Legenda da "fala": faixa semitransparente na parte inferior da lousa */
 #Caption {
     background-color: rgba(0, 0, 0, 150);

@@ -31,8 +31,10 @@ AskBar::AskBar(QWidget *parent)
     m_field->setClearButtonEnabled(true);
     connect(m_field, &QLineEdit::returnPressed, this, &AskBar::submit);
 
-    // Ctrl+Enter envia de qualquer lugar da janela
+    // Ctrl+Enter envia com o foco na barra (o editor de aula tem o mesmo atalho
+    // para "Aplicar e reproduzir"); Enter sozinho também envia
     auto *send = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_Return), this);
+    send->setContext(Qt::WidgetWithChildrenShortcut);
     connect(send, &QShortcut::activated, this, &AskBar::submit);
 
     m_ask = makeButton("Perguntar", this);

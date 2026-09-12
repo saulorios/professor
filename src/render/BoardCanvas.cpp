@@ -47,9 +47,60 @@ BoardCanvas::BoardCanvas(Board &board, QWidget *parent)
     m_caption->setAttribute(Qt::WA_TransparentForMouseEvents);
     m_caption->hide();
 
+    // Indicador de gravação (estilo no QSS, #RecordingBadge)
+    m_recording = new QLabel("● Gravando", this);
+    m_recording->setObjectName("RecordingBadge");
+    m_recording->setAttribute(Qt::WA_TransparentForMouseEvents);
+    m_recording->hide();
+
     // Atalho de teste: limpa a lousa
     auto *clearShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Delete), this);
     connect(clearShortcut, &QShortcut::activated, this, &BoardCanvas::clear);
+
+    // Fade do giz ao pausar ou terminar
+    m_fadeTimer.setInterval(16);
+    connect(&m_fadeTimer, &QTimer::timeout, this, [this] {
+        if (m_fadeClock.elapsed() >= qint64(m_giz.fadeMs)) {
+            m_fadeTimer.stop();
+            m_fading = false;
+            m_chalkVisible = false;
+        }
+        refreshChalk(m_chalkPose, true);
+    });
+}
+
+void BoardCanvas::setRecording(bool on)
+{
+    m_recording->setVisible(on);
+    updateCaptionGeometry();
+}
+
+void BoardCanvas::setGizParams(const GizParams &params)
+{
+    const bool had = m_chalkVisible;
+    const ChalkPose previous = m_chalkPose;
+    m_giz = params;
+    refreshChalk(previous, had);
+}
+
+void BoardCanvas::setChalkPose(const ChalkPose &pose)
+{
+    const bool had = m_chalkVisible;
+    const ChalkPose previous = m_chalkPose;
+    m_chalkPose = pose;
+    m_chalkVisible = true;
+    m_fading = false;
+    m_fadeTimer.stop();
+    refreshChalk(previous, had);
+}
+
+void BoardCanvas::hideChalk()
+{
+    if (!m_chalkVisible || m_fading)
+        return;
+    m_fading = true;
+    m_fadeClock.start();
+    m_fadeTimer.start();
 }
 
 void BoardCanvas::clear()
@@ -106,6 +157,20 @@ void BoardCanvas::paintEvent(QPaintEvent *)
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     const QRectF board = boardRect();
     painter.drawImage(board, m_image);
+
+    // Giz da mão virtual, por cima da lousa e fora do DepositBuffer
+    if (m_chalkVisible && m_giz.visible) {
+        const double fade = m_fading
+                                ? std::clamp(1.0 - double(m_fadeClock.elapsed()) / std::max(m_giz.fadeMs, 1.0), 0.0, 1.0)
+                                : 1.0;
+        painter.save();
+        painter.translate(board.topLeft());
+        const qreal s = board.width() / m_board.deposit.width();
+        painter.scale(s, s);
+        paintChalk(painter, m_chalkPose, m_giz, fade);
+        painter.restore();
+    }
+
     if (!m_overlayVisible)
         return;
 
@@ -242,28 +307,35 @@ float BoardCanvas::tabletTilt(const QTabletEvent *event) const
 void BoardCanvas::beginTool(Tool tool, const ChalkSample &sample)
 {
     m_tool = tool;
-    if (tool == Tool::Chalk)
+    if (tool == Tool::Chalk) {
         m_stroke.begin(sample);
-    else
+        emit freeStrokeStarted();
+        emit freeSample(sample.pos, sample.pressure, sample.timeMs);
+    } else {
         m_eraser.begin(sample);
+    }
     refresh();
 }
 
 void BoardCanvas::moveTool(const ChalkSample &sample)
 {
-    if (m_tool == Tool::Chalk)
+    if (m_tool == Tool::Chalk) {
         m_stroke.add(sample);
-    else
+        emit freeSample(sample.pos, sample.pressure, sample.timeMs);
+    } else {
         m_eraser.add(sample);
+    }
     refresh();
 }
 
 void BoardCanvas::endTool()
 {
-    if (m_tool == Tool::Chalk)
+    if (m_tool == Tool::Chalk) {
         m_stroke.end();
-    else
+        emit freeStrokeFinished();
+    } else {
         m_eraser.end();
+    }
     m_tool = Tool::None;
 }
 
@@ -313,8 +385,26 @@ void BoardCanvas::refresh()
     update(toWidget(dirty));
 }
 
+void BoardCanvas::refreshChalk(const ChalkPose &previous, bool hadChalk)
+{
+    // Só a região do giz (a antiga e a nova) precisa ser repintada
+    QRect region;
+    if (hadChalk)
+        region = toWidget(chalkBounds(previous, m_giz).toAlignedRect());
+    if (m_chalkVisible)
+        region = region.united(toWidget(chalkBounds(m_chalkPose, m_giz).toAlignedRect()));
+    if (!region.isEmpty())
+        update(region);
+}
+
 void BoardCanvas::updateCaptionGeometry()
 {
+    if (m_recording && m_recording->isVisible()) {
+        // Canto superior esquerdo da lousa, discreto
+        const QRect board = boardRect().toRect();
+        m_recording->adjustSize();
+        m_recording->move(board.left() + 12, board.top() + 12);
+    }
     if (!m_caption || !m_caption->isVisible())
         return;
     // Faixa na largura da lousa, encostada na borda inferior dela, com pelo menos

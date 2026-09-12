@@ -2,6 +2,8 @@
 
 #include "hand/HandParams.h"
 #include "physics/PhysicsParams.h"
+#include "render/ChalkOverlay.h"
+#include "scene/Humanizer.h"
 
 #include <QString>
 #include <QWidget>
@@ -16,6 +18,8 @@ class QSlider;
 struct TunableParams {
     PhysicsParams physics;
     HandParams hand;
+    GizParams giz;
+    HumanizerParams humanizer;
 };
 
 // Parâmetros do próprio painel (px)

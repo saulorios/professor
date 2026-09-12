@@ -2,6 +2,7 @@
 
 #include "Geometry2D.h"
 #include "HersheyFont.h"
+#include "Humanizer.h"
 #include "Layout.h"
 #include "Object3D.h"
 #include "SceneParams.h"
@@ -40,6 +41,10 @@ public:
     void reset();
 
     const SceneParams &params() const { return m_params; }
+
+    // Humanização da escrita (vale a partir do próximo texto)
+    void setHumanizerParams(const HumanizerParams &params) { m_humanizer.setParams(params); }
+    const HumanizerParams &humanizerParams() const { return m_humanizer.params(); }
     const std::vector<SceneElement> &elements() const { return m_elements; }
     QRectF usableArea() const { return m_layout.usableArea(); }
     bool contains(const QString &id) const { return Layout::find(m_elements, id) != nullptr; }
@@ -55,11 +60,16 @@ private:
     void writeText(const QJsonObject &command);
     void connectElements(const QJsonObject &command);
     void highlight(const QJsonObject &command);
+    void drawFreeStroke(const QJsonObject &command);
     void drawObject(const QJsonObject &command);
     void labelVertex(const QJsonObject &command);
     void dimensionEdge(const QJsonObject &command);
     void eraseElement(const QJsonObject &command);
     void clearAll();
+
+    // Texto já humanizado, com a linha de base em y = 0 e começando em x = 0
+    std::vector<HandStroke> writing(const QString &text, double size, bool cursive,
+                                    PressureLevel pressure) const;
 
     const Object3DInfo *findObject(const QString &id) const;
     void forgetObject(const QString &id);
@@ -83,6 +93,7 @@ private:
     HersheyFont m_cursiveFont;   // "fonte": "cursiva"
     TextLayout m_textLayout;
     TextLayout m_cursiveLayout;
+    Humanizer m_humanizer;
     Object3DBuilder m_builder3D;
     VirtualHand &m_hand;
     std::vector<SceneElement> m_elements; // na ordem em que foram desenhados

@@ -70,6 +70,65 @@ const Composite kComposites[] = {
     {u'Ç', 'C', Mark::Cedilla},    // Ç
 };
 
+// Ordem convencional dos traços da letra de forma (o que a escola ensina), em
+// vez da varredura de cima para baixo. Cada dígito é um traço do arquivo da
+// fonte (1 = o primeiro); "-" antes do dígito significa traçar ao contrário.
+// Exemplos: A = diagonal esquerda, diagonal direita, barra; E = haste, traço de
+// cima, do meio, de baixo; M = haste, desce, sobe, haste; i = haste e o pingo
+// depois; Z = traço de cima, diagonal, traço de baixo.
+struct StrokeOrder {
+    char16_t character;
+    const char *order;
+};
+
+const StrokeOrder kStrokeOrder[] = {
+    {u'A', "123"},   {u'B', "123"},    {u'C', "1"},   {u'D', "12"},  {u'E', "1234"},
+    {u'F', "123"},   {u'G', "12"},     {u'H', "123"}, {u'I', "1"},   {u'J', "1"},
+    {u'K', "123"},   {u'L', "12"},     {u'M', "12-34"}, {u'N', "12-3"}, {u'O', "1"},
+    {u'P', "12"},    {u'Q', "12"},     {u'R', "123"}, {u'S', "1"},   {u'T', "12"},
+    {u'U', "1"},     {u'V', "1-2"},    {u'W', "1-23-4"}, {u'X', "12"}, {u'Y', "12"},
+    {u'Z', "213"},
+    {u'a', "12"},    {u'b', "12"},     {u'c', "1"},   {u'd', "12"},  {u'e', "1"},
+    {u'f', "12"},    {u'g', "12"},     {u'h', "12"},  {u'i', "21"},  {u'j', "21"},
+    {u'k', "123"},   {u'l', "1"},      {u'm', "123"}, {u'n', "12"},  {u'o', "1"},
+    {u'p', "12"},    {u'q', "12"},     {u'r', "12"},  {u's', "1"},   {u't', "12"},
+    {u'u', "12"},    {u'v', "1-2"},    {u'w', "1-23-4"}, {u'x', "12"}, {u'y', "12"},
+    {u'z', "213"},
+    {u'0', "1"},     {u'1', "1"},      {u'2', "1"},   {u'3', "1"},   {u'4', "12"},
+    {u'5', "1"},     {u'6', "1"},      {u'7', "21"},  {u'8', "1"},   {u'9', "1"},
+};
+
+// Aplica a tabela; devolve false se ela não cobre este glifo (aí vale a
+// ordenação genérica, usada também na pontuação e nos acentuados compostos)
+bool applyStrokeOrder(QChar character, HersheyGlyph &glyph)
+{
+    const char *order = nullptr;
+    for (const StrokeOrder &entry : kStrokeOrder)
+        if (QChar(entry.character) == character) {
+            order = entry.order;
+            break;
+        }
+    if (!order)
+        return false;
+
+    std::vector<Polyline> ordered;
+    for (const char *c = order; *c; ++c) {
+        const bool reverse = *c == '-';
+        if (reverse)
+            ++c;
+        const std::size_t index = std::size_t(*c - '1');
+        if (index >= glyph.strokes.size())
+            return false; // outra fonte, com outro desenho: melhor não mexer
+        ordered.push_back(glyph.strokes[index]);
+        if (reverse)
+            std::reverse(ordered.back().begin(), ordered.back().end());
+    }
+    if (ordered.size() != glyph.strokes.size())
+        return false;
+    glyph.strokes = std::move(ordered);
+    return true;
+}
+
 QRectF inkBounds(const std::vector<Polyline> &strokes)
 {
     bool first = true;
@@ -158,9 +217,10 @@ bool HersheyFont::load(const QString &path, QString *error, bool reorderStrokes)
         if (stroke.size() >= 2)
             glyph.strokes.push_back(stroke);
 
-        if (reorderStrokes)
+        const QChar character(char16_t(32 + index));
+        if (reorderStrokes && !applyStrokeOrder(character, glyph))
             normalizeStrokeOrder(glyph);
-        m_glyphs.insert(QChar(char16_t(32 + index)), glyph);
+        m_glyphs.insert(character, glyph);
         ++index;
     }
 
@@ -183,6 +243,7 @@ const HersheyGlyph *HersheyFont::glyph(QChar c) const
     return it == m_glyphs.constEnd() ? nullptr : &it.value();
 }
 
+// Usada onde a tabela de ordem convencional não chega (pontuação, símbolos)
 void HersheyFont::normalizeStrokeOrder(HersheyGlyph &glyph)
 {
     // Cada traço aberto começa na ponta de cima (ou na da esquerda, se estiver na horizontal)

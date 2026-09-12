@@ -8,9 +8,20 @@
 
 namespace {
 
+constexpr double kPi = 3.141592653589793;
+
 double length(const QPointF &p)
 {
     return std::hypot(p.x(), p.y());
+}
+
+// Diferença de ângulos no intervalo (-pi, pi]: o giz gira pelo caminho curto
+double angleDelta(double from, double to)
+{
+    double d = std::fmod(to - from + kPi, 2.0 * kPi);
+    if (d < 0.0)
+        d += 2.0 * kPi;
+    return d - kPi;
 }
 
 } // namespace
@@ -59,13 +70,40 @@ void VirtualHand::draw(const std::vector<Polyline> &strokes, PressureLevel press
 void VirtualHand::draw(const std::vector<Polyline> &strokes, const std::vector<PressureLevel> &pressures,
                        Motion motion)
 {
+    std::vector<HandStroke> job;
+    job.reserve(strokes.size());
+    for (std::size_t i = 0; i < strokes.size(); ++i)
+        job.push_back({strokes[i], i < pressures.size() ? pressures[i] : PressureLevel::Normal, 1.0, 1.0, 0.0});
+    draw(job, motion);
+}
+
+void VirtualHand::draw(const std::vector<HandStroke> &strokes, Motion motion)
+{
     const bool writing = motion == Motion::Writing;
     const double speed = writing ? m_params.writingSpeed : m_params.baseSpeed;
 
     beginJob(Tool::Chalk, writing ? m_params.writingPenLiftMs : m_params.penLiftMs);
-    for (std::size_t i = 0; i < strokes.size(); ++i) {
-        const PressureLevel level = i < pressures.size() ? pressures[i] : PressureLevel::Normal;
-        appendStroke(strokes[i], speed, basePressure(level), true);
+    for (const HandStroke &stroke : strokes) {
+        m_cursor += std::max(0.0, stroke.pauseBeforeMs);
+        appendStroke(stroke.points, speed * stroke.speedScale,
+                     static_cast<float>(basePressure(stroke.pressure) * stroke.pressureScale), true);
+    }
+    startPlayback();
+}
+
+void VirtualHand::drawRecorded(const std::vector<RecordedPoint> &points)
+{
+    beginJob(Tool::Chalk, m_params.penLiftMs);
+    if (points.size() >= 2) {
+        // Tempo no ar até o começo do traço; daí em diante, o tempo gravado
+        m_cursor += m_penLift + length(points.front().pos - m_handPos) / m_params.travelSpeed * 1000.0;
+        const double start = m_cursor;
+        const double ppu = m_params.pixelsPerUnit;
+        for (std::size_t i = 0; i < points.size(); ++i)
+            m_plan.push_back({points[i].pos * ppu, points[i].pressure, start + points[i].timeMs, i == 0,
+                              i + 1 == points.size()});
+        m_cursor = start + points.back().timeMs;
+        m_handPos = points.back().pos;
     }
     startPlayback();
 }
@@ -73,6 +111,7 @@ void VirtualHand::draw(const std::vector<Polyline> &strokes, const std::vector<P
 void VirtualHand::erase(const QRectF &area)
 {
     beginJob(Tool::Eraser, m_params.penLiftMs);
+    emit chalkHidden(); // quem está na mão agora é o apagador
 
     // Zigue-zague horizontal cobrindo a área (com margem), dentro da lousa
     const QRectF r = area.adjusted(-m_params.eraserMargin, -m_params.eraserMargin,
@@ -118,6 +157,7 @@ void VirtualHand::cancel()
     m_plan.clear();
     m_next = 0;
     m_busy = false;
+    emit chalkHidden();
 }
 
 void VirtualHand::setPaused(bool paused)
@@ -127,6 +167,7 @@ void VirtualHand::setPaused(bool paused)
         return;
     if (paused) {
         m_timer.stop();
+        emit chalkHidden();
     } else {
         m_clock.restart();
         m_timer.start();
@@ -332,6 +373,8 @@ void VirtualHand::tick()
     while (m_next < m_plan.size() && m_plan[m_next].timeMs <= m_playhead)
         deliver(m_plan[m_next++]);
     emit boardChanged();
+    if (m_tool == Tool::Chalk)
+        publishPose();
 
     if (m_next >= m_plan.size() && m_playhead >= m_planEnd) {
         m_timer.stop();
@@ -339,6 +382,51 @@ void VirtualHand::tick()
         m_plan.clear();
         m_next = 0;
         m_busy = false;
+        emit chalkHidden();
         emit finished();
     }
+}
+
+void VirtualHand::publishPose()
+{
+    if (m_plan.empty())
+        return;
+
+    ChalkPose pose;
+    QPointF direction;
+
+    if (m_next == 0) {
+        // A mão ainda está indo para o primeiro traço
+        pose.tip = m_plan.front().pos;
+        pose.lift = 1.0;
+    } else if (m_next >= m_plan.size()) {
+        // Depois da última amostra o giz levanta e sai de cena
+        const TimedSample &last = m_plan.back();
+        pose.tip = last.pos;
+        pose.lift = std::clamp((m_playhead - last.timeMs) / std::max(m_penLift, 1.0), 0.0, 1.0);
+    } else {
+        const TimedSample &from = m_plan[m_next - 1];
+        const TimedSample &to = m_plan[m_next];
+        const double span = to.timeMs - from.timeMs;
+        const double t = span > 0.0 ? std::clamp((m_playhead - from.timeMs) / span, 0.0, 1.0) : 1.0;
+        const bool inAir = from.last; // o traço anterior acabou nesta amostra
+
+        pose.tip = from.pos + (to.pos - from.pos) * t;
+        pose.drawing = !inAir;
+        pose.lift = inAir ? std::sin(kPi * t) : 0.0; // sobe e desce suavemente no voo
+        // No ar, o giz já vai se orientando para o traço que vem
+        direction = inAir && m_next + 1 < m_plan.size() ? m_plan[m_next + 1].pos - to.pos : to.pos - from.pos;
+    }
+
+    if (length(direction) > 1e-6) {
+        const double target = std::atan2(direction.y(), direction.x());
+        if (!m_headingReady) {
+            m_heading = target;
+            m_headingReady = true;
+        } else {
+            m_heading += angleDelta(m_heading, target) * std::clamp(m_params.chalkTurnRate, 0.0, 1.0);
+        }
+    }
+    pose.heading = m_heading;
+    emit chalkMoved(pose);
 }

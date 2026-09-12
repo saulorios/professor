@@ -62,6 +62,10 @@ Field makeField(S TunableParams::*group, const char *groupKey, const char *secti
     makeField(&TunableParams::physics, "physics", section, &PhysicsParams::name, #name, label, min, max, decimals, flags)
 #define HAND(section, name, label, min, max, decimals, flags) \
     makeField(&TunableParams::hand, "hand", section, &HandParams::name, #name, label, min, max, decimals, flags)
+#define GIZ(section, name, label, min, max, decimals, flags) \
+    makeField(&TunableParams::giz, "giz", section, &GizParams::name, #name, label, min, max, decimals, flags)
+#define HUM(section, name, label, min, max, decimals, flags) \
+    makeField(&TunableParams::humanizer, "humanizer", section, &HumanizerParams::name, #name, label, min, max, decimals, flags)
 
 // Todos os campos de PhysicsParams e HandParams, na ordem dos structs
 const std::vector<Field> &fields()
@@ -137,12 +141,52 @@ const std::vector<Field> &fields()
         HAND("Mão · Apagador", eraserMargin, "Margem além da área (u)", 0, 5, 1, 0),
 
         HAND("Mão · Relógio", tickIntervalMs, "Intervalo do timer (ms)", 5, 50, 0, 0),
+        HAND("Mão · Relógio", chalkTurnRate, "Giro do giz por tick", 0.02, 1, 2, 0),
+
+        GIZ("Giz visível", visible, "Mostrar o giz", 0, 1, 0, 0),
+        GIZ("Giz visível", length, "Comprimento (u)", 1, 8, 1, 0),
+        GIZ("Giz visível", bodyRadius, "Meia largura na base (u)", 0.1, 1.5, 2, 0),
+        GIZ("Giz visível", tipRadius, "Meia largura na ponta (u)", 0.05, 1, 2, 0),
+        GIZ("Giz visível", tiltDegrees, "Inclinação para trás (graus)", 0, 80, 0, 0),
+        GIZ("Giz visível", liftHeight, "Subida entre traços (u)", 0, 6, 1, 0),
+        GIZ("Giz visível", liftFade, "Transparência no alto", 0, 1, 2, 0),
+        GIZ("Giz visível", fadeMs, "Desaparecer em (ms)", 0, 2000, 0, 0),
+        GIZ("Giz visível", shadow, "Sombra na lousa", 0, 1, 0, 0),
+        GIZ("Giz visível", shadowOffset, "Deslocamento da sombra (u)", 0, 3, 1, 0),
+        GIZ("Giz visível", shadowOpacity, "Opacidade da sombra", 0, 1, 2, 0),
+        GIZ("Giz visível", sideWidth, "Largura da face lateral", 0, 1, 2, 0),
+        GIZ("Giz visível", sideDarken, "Escurecimento da lateral", 0.2, 1, 2, 0),
+        GIZ("Giz visível", capFlatten, "Achatamento da base", 0.05, 1, 2, 0),
+        GIZ("Giz visível", wear, "Desgaste da ponta", 0, 1, 2, 0),
+
+        HUM("Escrita humana", intensity, "Intensidade (mestre)", 0, 1, 2, 0),
+        HUM("Escrita humana", scaleJitter, "Variação de tamanho (±)", 0, 0.2, 3, 0),
+        HUM("Escrita humana", rotationDegrees, "Rotação da letra (± graus)", 0, 10, 1, 0),
+        HUM("Escrita humana", baselineJitter, "Ondulação da linha de base (± u)", 0, 1, 2, 0),
+        HUM("Escrita humana", baselineWavelength, "Comprimento da ondulação (letras)", 1, 12, 1, 0),
+        HUM("Escrita humana", bowing, "Curvatura dos retos (fração)", 0, 0.1, 3, 0),
+        HUM("Escrita humana", minSegment, "Reto mínimo para encurvar (u)", 0.1, 3, 2, 0),
+        HUM("Escrita humana", bowSegments, "Pedaços da curva", 2, 16, 0, 0),
+        HUM("Escrita humana", cornerRadius, "Arredondamento das quinas (u)", 0, 1, 2, 0),
+        HUM("Escrita humana", closeGap, "Falha no fecho (fração)", 0, 0.1, 3, 0),
+        HUM("Escrita humana", overshoot, "Extrapolação (fração)", 0, 0.1, 3, 0),
+        HUM("Escrita humana", speedJitter, "Velocidade entre letras (±)", 0, 0.5, 2, 0),
+        HUM("Escrita humana", quickChance, "Chance de traço rápido", 0, 1, 2, 0),
+        HUM("Escrita humana", quickSpeed, "Quanto o traço rápido acelera", 1, 2, 2, 0),
+        HUM("Escrita humana", quickPressure, "Pressão do traço rápido", 0.3, 1, 2, 0),
+        HUM("Escrita humana", pauseWord, "Pausa entre palavras (ms)", 0, 600, 0, 0),
+        HUM("Escrita humana", pauseComma, "Pausa após vírgula (ms)", 0, 600, 0, 0),
+        HUM("Escrita humana", pauseStop, "Pausa após ponto (ms)", 0, 900, 0, 0),
+        HUM("Escrita humana", cursiveScale, "Intensidade na cursiva", 0, 1, 2, 0),
+        HUM("Escrita humana", seed, "Seed da aula", 0, 9999, 0, 0),
     };
     return table;
 }
 
 #undef PHYS
 #undef HAND
+#undef GIZ
+#undef HUM
 
 double scaleOf(const Field &field)
 {
@@ -349,17 +393,16 @@ bool TuningPanel::load(const QString &path, TunableParams *values, QString *erro
 
 bool TuningPanel::save(const QString &path, const TunableParams &values, QString *error)
 {
-    QJsonObject physics, hand;
+    QJsonObject root;
     for (const Field &field : fields()) {
         if (field.flags & ReadOnly)
             continue;
         const double v = field.get(values);
         const QJsonValue json = field.decimals == 0 ? QJsonValue(static_cast<qint64>(std::llround(v))) : QJsonValue(v);
-        (qstrcmp(field.group, "physics") == 0 ? physics : hand).insert(QLatin1String(field.key), json);
+        QJsonObject group = root.value(QLatin1String(field.group)).toObject();
+        group.insert(QLatin1String(field.key), json);
+        root.insert(QLatin1String(field.group), group);
     }
-    QJsonObject root;
-    root.insert("physics", physics);
-    root.insert("hand", hand);
 
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)) {

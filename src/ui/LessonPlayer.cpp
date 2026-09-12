@@ -3,6 +3,9 @@
 #include "physics/Board.h"
 
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonParseError>
+#include <QSaveFile>
 
 LessonPlayer::LessonPlayer(Board &board, QObject *parent)
     : QObject(parent)
@@ -25,6 +28,8 @@ LessonPlayer::LessonPlayer(Board &board, QObject *parent)
     connect(&m_queue, &CommandQueue::speech, this, &LessonPlayer::speech);
     connect(&m_queue, &CommandQueue::stepFinished, this, &LessonPlayer::stepFinished);
     connect(&m_hand, &VirtualHand::boardChanged, this, &LessonPlayer::boardChanged);
+    connect(&m_hand, &VirtualHand::chalkMoved, this, &LessonPlayer::chalkMoved);
+    connect(&m_hand, &VirtualHand::chalkHidden, this, &LessonPlayer::chalkHidden);
     connect(&m_queue, &CommandQueue::idle, this, [this] {
         m_playing = false;
         m_finished = !m_streaming; // se ainda está chegando, a aula não acabou
@@ -49,6 +54,69 @@ bool LessonPlayer::open(const QString &path, QString *error)
     m_loaded = true;
     startFromBeginning();
     return true;
+}
+
+bool LessonPlayer::save(const QString &path, QString *error) const
+{
+    QSaveFile file(path);
+    if (!file.open(QIODevice::WriteOnly)) {
+        *error = QString("Não foi possível gravar \"%1\": %2").arg(path, file.errorString());
+        return false;
+    }
+    file.write(lessonText().toUtf8());
+    file.write("\n");
+    if (!file.commit()) {
+        *error = file.errorString();
+        return false;
+    }
+    return true;
+}
+
+QString LessonPlayer::lessonText() const
+{
+    QStringList lines;
+    for (const QJsonObject &command : m_commands)
+        lines << QString::fromUtf8(QJsonDocument(command).toJson(QJsonDocument::Compact));
+    return lines.join('\n');
+}
+
+bool LessonPlayer::applyText(const QString &text, QStringList *errors)
+{
+    // Valida tudo antes de trocar a aula: um erro de sintaxe não pode derrubar
+    // o que já está tocando
+    QList<QJsonObject> parsed;
+    const QStringList lines = text.split('\n');
+    for (int i = 0; i < lines.size(); ++i) {
+        const QString line = lines[i].trimmed();
+        if (line.isEmpty())
+            continue;
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(line.toUtf8(), &parseError);
+        if (parseError.error != QJsonParseError::NoError)
+            errors->append(QString("linha %1: %2").arg(i + 1).arg(parseError.errorString()));
+        else if (!document.isObject())
+            errors->append(QString("linha %1: não é um objeto JSON").arg(i + 1));
+        else if (!document.object().value("tipo").isString())
+            errors->append(QString("linha %1: falta o campo \"tipo\"").arg(i + 1));
+        else
+            parsed.append(document.object());
+    }
+    if (!errors->isEmpty())
+        return false;
+
+    m_streaming = false;
+    m_commands = parsed;
+    m_loaded = true;
+    startFromBeginning();
+    return true;
+}
+
+void LessonPlayer::appendCommand(const QJsonObject &command)
+{
+    m_commands.append(command);
+    m_loaded = true;
+    emit commandReceived(command);
+    emit stateChanged();
 }
 
 void LessonPlayer::startStream(bool clearBoard)

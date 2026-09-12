@@ -49,6 +49,9 @@ struct HandParams {
     double eraserRowSpacing = 2.5;       // distância entre as linhas do zigue-zague
     double eraserMargin = 1.0;           // margem além da bounding box
 
+    // --- Giz visível (só aparência; ver GizParams em render/) ---
+    double chalkTurnRate = 0.25;         // 0..1: quanto o giz gira por tick rumo à direção do traço
+
     // --- Relógio ---
     int tickIntervalMs = 16;             // QTimer de ~60 Hz
 };

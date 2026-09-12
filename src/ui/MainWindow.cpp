@@ -1,5 +1,6 @@
 #include "MainWindow.h"
 #include "AskBar.h"
+#include "LessonEditor.h"
 #include "PlayerBar.h"
 #include "TitleBar.h"
 #include "TuningPanel.h"
@@ -40,6 +41,11 @@ MainWindow::MainWindow(QWidget *parent)
     setMenuWidget(m_titleBar);
     connect(this, &QWidget::windowTitleChanged, m_titleBar, &TitleBar::setTitle);
     m_titleBar->fileMenu()->addAction("Abrir aula (.jsonl)...", this, &MainWindow::openLesson);
+    m_record = m_titleBar->fileMenu()->addAction("Gravar traços", this, &MainWindow::toggleRecording);
+    m_record->setCheckable(true);
+    m_record->setShortcut(QKeySequence(Qt::CTRL | Qt::Key_R));
+    m_titleBar->fileMenu()->addAction("Salvar aula (.jsonl)...", this, &MainWindow::saveLesson)
+        ->setShortcut(QKeySequence::Save);
 
     // Body: lousa com o painel de ajuste (oculto) à direita e a barra do player embaixo
     m_body = new QWidget(this);
@@ -59,6 +65,10 @@ MainWindow::MainWindow(QWidget *parent)
     m_log->setFixedHeight(m_params.logHeight);
     m_log->hide();
 
+    // Editor da aula (F9)
+    m_editor = new LessonEditor(m_body);
+    m_editor->hide();
+
     auto *boardRow = new QHBoxLayout;
     boardRow->setContentsMargins(0, 0, 0, 0);
     boardRow->setSpacing(0);
@@ -70,12 +80,15 @@ MainWindow::MainWindow(QWidget *parent)
     bodyLayout->setSpacing(0);
     bodyLayout->addLayout(boardRow, 1);
     bodyLayout->addWidget(m_log);
+    bodyLayout->addWidget(m_editor);
     bodyLayout->addWidget(m_askBar);
     bodyLayout->addWidget(playerBar);
     setCentralWidget(m_body);
 
     // Aula: a mão desenha no mesmo Board; a lousa só recompõe a região alterada
     connect(&m_player, &LessonPlayer::boardChanged, m_canvas, &BoardCanvas::refresh);
+    connect(&m_player, &LessonPlayer::chalkMoved, m_canvas, &BoardCanvas::setChalkPose);
+    connect(&m_player, &LessonPlayer::chalkHidden, m_canvas, &BoardCanvas::hideChalk);
     connect(&m_player, &LessonPlayer::speech, m_canvas, &BoardCanvas::setCaption);
     connect(&m_player, &LessonPlayer::stateChanged, playerBar, [this, playerBar] {
         playerBar->setState(m_player.isLoaded(), m_player.isPlaying());
@@ -130,6 +143,43 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_tuningPanel, &TuningPanel::clearRequested, m_canvas, &BoardCanvas::clear);
     connect(m_tuningPanel, &TuningPanel::saveRequested, this, &MainWindow::saveParams);
     loadParams();
+
+    // Gravação de traços livres: a lousa avisa cada amostra do giz do usuário
+    connect(m_canvas, &BoardCanvas::freeStrokeStarted, &m_recorder, &LessonRecorder::beginStroke);
+    connect(m_canvas, &BoardCanvas::freeSample, &m_recorder, &LessonRecorder::addSample);
+    connect(m_canvas, &BoardCanvas::freeStrokeFinished, &m_recorder, &LessonRecorder::endStroke);
+    connect(&m_recorder, &LessonRecorder::commandRecorded, &m_player, &LessonPlayer::appendCommand);
+    connect(&m_recorder, &LessonRecorder::recordingChanged, this, [this](bool on) {
+        m_canvas->setRecording(on);
+        m_record->setChecked(on);
+        if (!on && m_editor->isVisible())
+            m_editor->setText(m_player.lessonText());
+    });
+
+    // Editor da aula: F9 abre e fecha
+    auto *toggleEditor = new QShortcut(QKeySequence(Qt::Key_F9), this);
+    connect(toggleEditor, &QShortcut::activated, this, [this] {
+        const bool show = !m_editor->isVisible();
+        if (show)
+            m_editor->setText(m_player.lessonText());
+        m_editor->setVisible(show);
+    });
+    connect(m_editor, &LessonEditor::applyRequested, this, &MainWindow::applyEditor);
+    connect(m_editor, &LessonEditor::saveRequested, this, &MainWindow::saveLesson);
+    connect(m_editor, &LessonEditor::openRequested, this, &MainWindow::openLesson);
+
+    // View: mostrar ou não o giz da mão virtual (o mesmo valor está no F10)
+    m_showChalk = m_titleBar->viewMenu()->addAction("Mostrar giz");
+    m_showChalk->setCheckable(true);
+    m_showChalk->setChecked(m_canvas->gizParams().visible);
+    connect(m_showChalk, &QAction::toggled, this, [this](bool on) {
+        TunableParams values = m_tuningPanel->values();
+        if (bool(values.giz.visible) == on)
+            return;
+        values.giz.visible = on;
+        m_tuningPanel->setValues(values);
+        applyParams(values);
+    });
 
     // Modo de depuração: F12 mostra/esconde as bounding boxes e ids
     auto *toggleDebug = new QShortcut(QKeySequence(Qt::Key_F12), this);
@@ -203,6 +253,44 @@ void MainWindow::openLesson()
     QString error;
     if (!m_player.open(path, &error))
         QMessageBox::warning(this, "Abrir aula", error);
+    else if (m_editor->isVisible())
+        m_editor->setText(m_player.lessonText());
+}
+
+void MainWindow::saveLesson()
+{
+    QString path = QFileDialog::getSaveFileName(this, "Salvar aula", QString(),
+                                                "Aulas (*.jsonl);;Todos os arquivos (*)");
+    if (path.isEmpty())
+        return;
+    if (!path.endsWith(".jsonl", Qt::CaseInsensitive))
+        path += ".jsonl";
+    // O que estiver no editor é o que vale, se ele estiver aberto
+    if (m_editor->isVisible()) {
+        QStringList errors;
+        if (!m_player.applyText(m_editor->text(), &errors)) {
+            m_editor->setErrors(errors);
+            return;
+        }
+    }
+    QString error;
+    if (!m_player.save(path, &error))
+        QMessageBox::warning(this, "Salvar aula", error);
+}
+
+void MainWindow::toggleRecording()
+{
+    m_recorder.setPixelsPerUnit(m_player.handParams().pixelsPerUnit);
+    m_recorder.setRecording(!m_recorder.isRecording());
+}
+
+void MainWindow::applyEditor()
+{
+    QStringList errors;
+    if (m_player.applyText(m_editor->text(), &errors))
+        m_editor->setErrors({});
+    else
+        m_editor->setErrors(errors);
 }
 
 void MainWindow::applyParams(const TunableParams &values)
@@ -210,11 +298,21 @@ void MainWindow::applyParams(const TunableParams &values)
     if (m_board.setParams(values.physics))
         m_canvas->rebuildSurface();
     m_player.setHandParams(values.hand);
+    m_player.setHumanizerParams(values.humanizer);
+
+    GizParams giz = values.giz;
+    giz.pixelsPerUnit = values.hand.pixelsPerUnit;
+    m_canvas->setGizParams(giz);
+    if (m_showChalk && m_showChalk->isChecked() != giz.visible) {
+        QSignalBlocker blocker(m_showChalk);
+        m_showChalk->setChecked(giz.visible);
+    }
 }
 
 void MainWindow::loadParams()
 {
-    TunableParams values{m_board.params(), m_player.handParams()};
+    TunableParams values{m_board.params(), m_player.handParams(), m_canvas->gizParams(),
+                         m_player.humanizerParams()};
     const QString path = paramsPath();
     if (QFile::exists(path)) {
         QString error;

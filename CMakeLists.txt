@@ -49,6 +49,7 @@ target_link_libraries(physics PUBLIC Qt6::Core)
 # hand/: mão virtual (polilinhas → ChalkSamples ao longo do tempo)
 add_library(hand STATIC
     src/hand/Polyline.h
+    src/hand/ChalkPose.h
     src/hand/HandParams.h
     src/hand/VirtualHand.h
     src/hand/VirtualHand.cpp
@@ -63,6 +64,8 @@ add_library(scene STATIC
     src/scene/Geometry2D.cpp
     src/scene/HersheyFont.h
     src/scene/HersheyFont.cpp
+    src/scene/Humanizer.h
+    src/scene/Humanizer.cpp
     src/scene/JsonHelpers.h
     src/scene/Layout.h
     src/scene/Layout.cpp
@@ -99,10 +102,16 @@ add_executable(lousa
     src/main.cpp
     src/render/BoardCanvas.h
     src/render/BoardCanvas.cpp
+    src/render/ChalkOverlay.h
+    src/render/ChalkOverlay.cpp
     src/ui/AskBar.h
     src/ui/AskBar.cpp
+    src/ui/LessonEditor.h
+    src/ui/LessonEditor.cpp
     src/ui/LessonPlayer.h
     src/ui/LessonPlayer.cpp
+    src/ui/LessonRecorder.h
+    src/ui/LessonRecorder.cpp
     src/ui/MainWindow.h
     src/ui/MainWindow.cpp
     src/ui/PlayerBar.h

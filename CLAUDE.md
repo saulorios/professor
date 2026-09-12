@@ -35,9 +35,10 @@ src/hand/      → "mão do professor": converte polilinhas (formas e letras)
 src/physics/   → física do giz: Board, BoardSurface, ChalkStick, DepositBuffer,
                  StrokeEngine, Eraser
    ▼
-src/render/    → BoardCanvas: desenha o DepositBuffer na tela
+src/render/    → BoardCanvas: desenha o DepositBuffer na tela e, por cima dele,
+                 o giz da mão virtual (ChalkOverlay)
 src/ui/        → MainWindow, TitleBar, PlayerBar, AskBar, LessonPlayer,
-                 TuningPanel e demais widgets
+                 LessonRecorder, LessonEditor, TuningPanel e demais widgets
 ```
 
 ### Regras de dependência (importante)
@@ -103,8 +104,8 @@ struct ChalkSample {
   recalcula e redesenha só essa região (`refresh()`).
 
 Controles na lousa: botão esquerdo (ou ponta da caneta) = giz; botão direito =
-apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes); F10 = painel de
-ajuste; F12 = modo de depuração do layout.
+apagador; `Ctrl+Shift+Delete` limpa a lousa (útil para testes); F9 = editor da
+aula; F10 = painel de ajuste; F12 = modo de depuração do layout.
 
 ## Painel de ajuste (F10)
 
@@ -134,7 +135,8 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
 - Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
   linha, seta, arco), `escrever`, `conectar`, `destacar`, `objeto_3d`, `rotular`,
-  `cotar`, `pausa`, `fala`, `apagar`, `limpar`. Os demais geram aviso e são pulados.
+  `cotar`, `traco_livre`, `pausa`, `fala`, `fim_passo`, `apagar`, `limpar`. Os
+  demais geram aviso e são pulados.
 - `scene/Scene`: guarda todos os elementos desenhados (com ou sem id) com a
   bounding box e o ponto de referência; `conectar` liga as bordas dos elementos
   (elipse inscrita na bounding box para círculos/elipses, a própria caixa para os
@@ -186,6 +188,67 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - Modo de depuração (F12): a `BoardCanvas` desenha por cima da lousa, com
   QPainter e fora do `DepositBuffer`, a área útil (tracejada) e as bounding boxes
   com os ids (ou uma descrição, para elementos sem id).
+
+## Giz visível (`render/ChalkOverlay`)
+
+- A mão virtual publica onde o giz está (`ChalkPose`: ponta em pixels da lousa,
+  direção do traço, quanto está levantado). A `BoardCanvas` desenha o giz com
+  QPainter **por cima** da lousa, fora do `DepositBuffer`: não deixa rastro.
+- Aparência: cilindro em perspectiva simples (corpo `#F2F0E6`, face lateral mais
+  escura, base em elipse achatada e ponta gasta irregular), ~3 unidades, sem
+  contorno e sem sombra dura. A ponta fica exatamente na amostra atual da mão.
+- O giz aponta na direção do traço, inclinado para trás (`tiltDegrees`, 35°), e
+  gira suavemente ao mudar de direção (`HandParams::chalkTurnRate`, nunca salto).
+  Entre traços ele sobe (`liftHeight`) e clareia (`liftFade`), descendo de novo
+  ao encostar. Ao pausar ou terminar, some com fade de `fadeMs` (300 ms).
+- Sombra na lousa é opcional (`shadow`, padrão desligada). Ligar/desligar o giz:
+  View > "Mostrar giz" (padrão ligado) ou o slider do F10 — são o mesmo valor.
+- Desenhando com o mouse o giz **não** aparece: só a mão virtual publica pose.
+
+## Escrita humana (`scene/Humanizer`)
+
+Aplicado às polilinhas do glifo antes de entregar à mão, sem trocar de fonte.
+`HumanizerParams::intensity` (0..1, padrão 0.5) é o mestre e escala todo o
+resto; com 0 a saída é exatamente a da fonte (regressão).
+
+- Cada ocorrência de cada caractere tem a sua seed (caractere + posição na frase
+  + seed da aula): o mesmo "a" sai diferente nas duas vezes.
+- Escala ±4% e rotação ±2,5° por letra, em torno da base dela; linha de base com
+  ±0,15 u vinda de ruído 1D ao longo da frase (ondulada, não serrilhada).
+- Segmentos retos longos viram curvas de flecha até 1,5% (é o que mais tira a
+  cara de plotter); quinas dentro do traço ficam levemente arredondadas.
+- Traços fechados (O, o, D, 0) não fecham perfeito: falha ou sobreposição de até
+  2% do perímetro. Traços que encostam em outro passam até 2% além (o "T").
+- Ritmo: ±10% de velocidade entre letras, micro-pausas depois de vírgula, ponto
+  e entre palavras, e um traço vez por outra mais rápido e mais leve
+  (`HandStroke` leva velocidade, pressão e pausa próprios até a mão).
+- Vale para a fonte normal e para a cursiva; na cursiva a intensidade cai pela
+  metade (`cursiveScale`) e a ordem dos traços não muda.
+- Ordem dos traços: `HersheyFont` usa uma tabela de ordem convencional de letra
+  de forma (A-Z, a-z, 0-9) — A: diagonal esquerda, diagonal direita, barra;
+  E: haste e os três horizontais; M: haste, desce, sobe, haste; O: de cima, no
+  sentido anti-horário; t: haste e depois a barra; i: haste e depois o pingo.
+  Onde a tabela não chega (pontuação, símbolos), vale a ordenação genérica de
+  antes. Acentos continuam por último.
+
+## Gravar e editar aulas
+
+- File > "Gravar traços" (Ctrl+R) grava o que for desenhado com o mouse ou a
+  caneta; um indicador discreto aparece no canto da lousa. `ui/LessonRecorder`
+  transforma cada traço em um comando `traco_livre`, com os pontos em unidades
+  da lousa simplificados por Douglas-Peucker (tolerância 0,2 u) e guardando a
+  pressão e o instante de cada ponto que sobrou.
+- `traco_livre` é do protocolo (documentado em `docs/ia-protocol.md` com a nota
+  de que a IA não deve gerá-lo). Ao reproduzir, `VirtualHand::drawRecorded`
+  refaz o traço com o tempo e a pressão originais: sem perfil de velocidade,
+  sem tremor e sem reamostragem.
+- File > "Salvar aula (.jsonl)..." (Ctrl+S) grava a aula inteira.
+- `ui/LessonEditor` (F9): a aula em JSON Lines, fonte monoespaçada.
+  "Aplicar e reproduzir" (Ctrl+Enter com o foco no editor) valida antes de
+  rodar — erros aparecem como "linha N: ..." e a aula atual não é tocada.
+  "Inserir comando" traz um modelo pronto de cada tipo; Abrir e Salvar usam os
+  mesmos diálogos do menu File. Assim dá para desenhar, gravar e depois
+  acrescentar falas e pausas no texto.
 
 ## Texto (comando `escrever`)
 

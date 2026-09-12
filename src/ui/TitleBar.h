@@ -62,8 +62,9 @@ class TitleBar : public QWidget
 public:
     explicit TitleBar(QWidget *parent = nullptr);
 
-    // Menu "File", para a janela acrescentar suas ações
+    // Menus "File" e "View", para a janela acrescentar suas ações
     QMenu *fileMenu() const { return m_fileMenu; }
+    QMenu *viewMenu() const { return m_viewMenu; }
 
 public slots:
     void setTitle(const QString &title);
@@ -85,6 +86,7 @@ private:
     QLabel *m_logo = nullptr;
     QMenuBar *m_menuBar = nullptr;
     QMenu *m_fileMenu = nullptr;
+    QMenu *m_viewMenu = nullptr;
     QLabel *m_titleLabel = nullptr;
     TitleBarButton *m_minimizeButton = nullptr;
     TitleBarButton *m_maximizeButton = nullptr;

@@ -112,6 +112,8 @@ TitleBar::TitleBar(QWidget *parent)
         QMenu *added = m_menuBar->addMenu(menu);
         if (menu == "File")
             m_fileMenu = added;
+        else if (menu == "View")
+            m_viewMenu = added;
     }
 
     // Título: fica fora do layout e é posicionado em updateTitleGeometry(),

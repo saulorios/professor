@@ -1,12 +1,16 @@
 #pragma once
 
+#include "ChalkOverlay.h"
+#include "hand/ChalkPose.h"
 #include "physics/Board.h"
 #include "physics/Eraser.h"
 #include "physics/StrokeEngine.h"
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QImage>
 #include <QString>
+#include <QTimer>
 #include <QWidget>
 
 #include <vector>
@@ -59,6 +63,9 @@ public:
 
     bool isOverlayVisible() const { return m_overlayVisible; }
 
+    const GizParams &gizParams() const { return m_giz; }
+    void setGizParams(const GizParams &params);
+
 public slots:
     // Limpa a lousa e troca o giz por um novo
     void clear();
@@ -81,6 +88,20 @@ public slots:
     // Linhas e pontos extras dos objetos 3D (arestas ocultas e pontos de fuga)
     void setOverlayGeometry(const std::vector<OverlayLine> &lines, const std::vector<QPointF> &points);
     void setOverlayVisible(bool visible);
+
+    // Giz da mão virtual: aparece na posição da amostra atual e some com fade.
+    // O giz do mouse não usa isto (o cursor do usuário já faz esse papel).
+    void setChalkPose(const ChalkPose &pose);
+    void hideChalk();
+
+    // Indicador discreto de gravação, no canto da lousa
+    void setRecording(bool on);
+
+signals:
+    // Traços feitos à mão pelo usuário (só o giz), para o gravador de aulas
+    void freeStrokeStarted();
+    void freeSample(const QPointF &boardPixels, float pressure, double timeMs);
+    void freeStrokeFinished();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -107,6 +128,8 @@ private:
 
     void buildBaseImage();
     void updateCaptionGeometry();
+    // Repinta a área do giz (a de antes e a de agora), em coordenadas do widget
+    void refreshChalk(const ChalkPose &previous, bool hadChalk);
 
     BoardCanvasParams m_params;
     Board &m_board;
@@ -117,7 +140,15 @@ private:
     QImage m_image;  // cache exibido na tela
     Tool m_tool = Tool::None;
     QLabel *m_caption = nullptr;
+    QLabel *m_recording = nullptr;
     double m_captionBandPx = 0.0;   // px da lousa
+
+    GizParams m_giz;
+    ChalkPose m_chalkPose;
+    bool m_chalkVisible = false;
+    QTimer m_fadeTimer;        // desaparecimento do giz
+    QElapsedTimer m_fadeClock;
+    bool m_fading = false;
 
     std::vector<OverlayBox> m_overlay;
     std::vector<OverlayLine> m_overlayLines;

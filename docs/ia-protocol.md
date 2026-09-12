@@ -154,6 +154,15 @@ Cada parte aceita `"posicao":[x,y,z]` (padrão `[0,0,0]`, Y para cima) e
   desfazer a ambiguidade.
 - `cotar` põe a cota fora do objeto, paralela à aresta escolhida.
 
+### Traço livre (uso interno)
+
+```
+{"tipo":"traco_livre","id":"traco_1","pontos":[[20,30,0.6,0],[24,31,0.62,0.15]]}
+```
+Cada ponto é `[x, y, pressao]` ou `[x, y, pressao, t]`, com `t` em segundos
+desde o início do traço; com `t`, a mão refaz o traço no tempo original.
+**Uso interno de aulas gravadas. A IA NÃO deve gerar este comando.**
+
 ### Apagar
 
 ```
