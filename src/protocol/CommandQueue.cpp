@@ -83,6 +83,10 @@ void CommandQueue::startNext()
         // Não bloqueia: a legenda aparece e o próximo comando já começa
         emit speech(command.value("texto").toString());
         finishLater();
+    } else if (type == "pergunta") {
+        // Marca de uma pergunta do aluno: não desenha nada, só organiza a aula
+        emit question(command.value("texto").toString());
+        finishLater();
     } else if (type == "fim_passo") {
         // Fim de um passo da aula: quem manda continuar é o aluno
         emit stepFinished();

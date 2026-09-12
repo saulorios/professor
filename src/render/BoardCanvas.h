@@ -34,6 +34,8 @@ struct BoardCanvasParams {
     int scrollAnimationMs = 600;      // uma tela inteira leva isto (rolagem automática)
     double wheelStep = 90.0;          // px do canvas por "clique" da roda
     double revealMargin = 24.0;       // folga ao trazer algo para a vista (px do canvas)
+    double flashMs = 1000.0;          // realce ao pular para um trecho da timeline
+    QColor flashColor{0x4F, 0xC1, 0xFF};
     int scrollBarWidth = 8;
 
     // Modo de depuração (F12)
@@ -103,6 +105,9 @@ public slots:
     // Aula nova: o motor volta a mandar na vista (desfaz a rolagem manual)
     void resumeFollowing();
 
+    // Realça uma faixa do canvas por um instante (clique na timeline)
+    void flashArea(const QRectF &canvasPixels);
+
     // Rolagem imediata (usuário) e animada (motor)
     void setScroll(double canvasPixels);
     void scrollBy(double canvasPixels);
@@ -127,6 +132,7 @@ public slots:
     void setRecording(bool on);
 
 signals:
+    void scrolled(double canvasTop); // a vista mudou de posição
     // Traços feitos à mão pelo usuário (só o giz), para o gravador de aulas
     void freeStrokeStarted();
     void freeSample(const QPointF &canvasPixels, float pressure, double timeMs);
@@ -196,6 +202,9 @@ private:
     GizParams m_giz;
     ChalkPose m_chalkPose;
     bool m_chalkVisible = false;
+    QRectF m_flash;            // faixa realçada agora
+    QElapsedTimer m_flashClock;
+    QTimer m_flashTimer;
     QTimer m_fadeTimer;        // desaparecimento do giz
     QElapsedTimer m_fadeClock;
     bool m_fading = false;

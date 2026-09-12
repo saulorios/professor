@@ -106,8 +106,8 @@ add_executable(lousa
     src/render/BoardCanvas.cpp
     src/render/ChalkOverlay.h
     src/render/ChalkOverlay.cpp
-    src/ui/AskBar.h
-    src/ui/AskBar.cpp
+    src/ui/AgentPanel.h
+    src/ui/AgentPanel.cpp
     src/ui/LessonEditor.h
     src/ui/LessonEditor.cpp
     src/ui/LessonPlayer.h

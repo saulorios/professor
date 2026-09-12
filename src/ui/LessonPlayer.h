@@ -32,6 +32,8 @@ public:
     bool applyText(const QString &text, QStringList *errors);
     // Acrescenta um comando à aula sem desenhá-lo (usado pelo gravador de traços)
     void appendCommand(const QJsonObject &command);
+    // Prepara a lousa para uma resposta nova; devolve o topo dela em pixels
+    double startAnswer();
 
     // Aula que chega aos poucos (da IA). `clearBoard` false continua a aula
     // atual, mantendo o que já está na lousa (resposta a "fim_passo").
@@ -65,6 +67,7 @@ signals:
     void stateChanged();
     void commandReceived(const QJsonObject &command); // para o log da aula
     void stepFinished();               // a IA terminou um passo e espera
+    void question(const QString &text); // "pergunta" de uma aula gravada
     void chalkMoved(const ChalkPose &pose); // giz visível na tela
     void chalkHidden();
     void canvasResized();                          // a lousa cresceu (ou voltou a uma tela)

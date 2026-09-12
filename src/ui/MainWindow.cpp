@@ -1,5 +1,5 @@
 #include "MainWindow.h"
-#include "AskBar.h"
+#include "AgentPanel.h"
 #include "LessonEditor.h"
 #include "PlayerBar.h"
 #include "TitleBar.h"
@@ -19,6 +19,7 @@
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QShortcut>
+#include <QSplitter>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -54,7 +55,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_tuningPanel = new TuningPanel(m_body);
     m_tuningPanel->hide();
     auto *playerBar = new PlayerBar(m_body);
-    m_askBar = new AskBar(m_body);
+    m_agent = new AgentPanel(m_body);
 
     // Log dos comandos recebidos (recolhível, útil para depurar a IA)
     m_log = new QPlainTextEdit(m_body);
@@ -75,14 +76,34 @@ MainWindow::MainWindow(QWidget *parent)
     boardRow->addWidget(m_canvas, 1);
     boardRow->addWidget(m_tuningPanel);
 
+    // Coluna da lousa: quadro, log, editor e os controles de reprodução
+    auto *boardColumn = new QWidget(m_body);
+    boardColumn->setObjectName("BoardColumn");
+    boardColumn->setMinimumWidth(m_params.minimumBoardWidth);
+    auto *boardLayout = new QVBoxLayout(boardColumn);
+    boardLayout->setContentsMargins(0, 0, 0, 0);
+    boardLayout->setSpacing(0);
+    boardLayout->addLayout(boardRow, 1);
+    boardLayout->addWidget(m_log);
+    boardLayout->addWidget(m_editor);
+    boardLayout->addWidget(playerBar);
+
+    // O painel do professor fica à direita, redimensionável pelo splitter
+    m_splitter = new QSplitter(Qt::Horizontal, m_body);
+    m_splitter->setObjectName("BodySplitter");
+    m_splitter->setHandleWidth(1);
+    m_splitter->addWidget(boardColumn);
+    m_splitter->addWidget(m_agent);
+    m_splitter->setStretchFactor(0, 1);
+    m_splitter->setStretchFactor(1, 0);
+    m_splitter->setCollapsible(0, false);
+    m_splitter->setSizes({m_params.initialSize.width() - m_agent->preferredWidth(),
+                          m_agent->preferredWidth()});
+
     auto *bodyLayout = new QVBoxLayout(m_body);
     bodyLayout->setContentsMargins(0, 0, 0, 0);
     bodyLayout->setSpacing(0);
-    bodyLayout->addLayout(boardRow, 1);
-    bodyLayout->addWidget(m_log);
-    bodyLayout->addWidget(m_editor);
-    bodyLayout->addWidget(m_askBar);
-    bodyLayout->addWidget(playerBar);
+    bodyLayout->addWidget(m_splitter, 1);
     setCentralWidget(m_body);
 
     // Aula: a mão desenha no mesmo Board; a lousa só recompõe a região alterada
@@ -103,39 +124,68 @@ MainWindow::MainWindow(QWidget *parent)
     connect(playerBar, &PlayerBar::speedChanged, &m_player, &LessonPlayer::setSpeed);
 
     // Aula pela IA: o proxy guarda a chave; aqui só chega texto, em pedaços
-    connect(m_askBar, &AskBar::asked, this, &MainWindow::askAi);
-    connect(m_askBar, &AskBar::stopRequested, this, [this] {
+    connect(m_agent, &AgentPanel::asked, this, &MainWindow::askAi);
+    connect(m_agent, &AgentPanel::stopRequested, this, [this] {
+        // Antes de abortar: o abort pode terminar o reply na hora e o cartão
+        // seria marcado como concluído
+        m_agent->finishSegment(TimelineCard::State::Stopped);
         m_ai.stop();
-        m_askBar->setStatus("Resposta interrompida.");
+        m_agent->setStatus("Resposta interrompida.");
     });
-    connect(m_askBar, &AskBar::continueRequested, this, [this] {
+    connect(m_agent, &AgentPanel::continueRequested, this, [this] {
         logLine("> continue");
-        m_askBar->setStatus("Perguntando...");
+        m_agent->setStatus("Perguntando...");
         m_streamCommands = 0;
         m_player.startStream(false); // continua a mesma aula, sem limpar a lousa
         m_ai.continueLesson();
     });
-    connect(m_askBar, &AskBar::logToggled, m_log, &QWidget::setVisible);
-    connect(&m_ai, &AiClient::started, this, [this] { m_askBar->setBusy(true); });
+    connect(m_agent, &AgentPanel::logToggled, m_log, &QWidget::setVisible);
+    connect(m_agent, &AgentPanel::newLessonRequested, this, &MainWindow::newLesson);
+    connect(m_agent, &AgentPanel::historyRequested, this, [this] {
+        m_agent->setStatus("O histórico desta aula está na timeline; abra outra em File > Abrir aula.");
+    });
+    connect(m_agent, &AgentPanel::closeRequested, this, [this] { m_showPanel->setChecked(false); });
+    connect(m_agent, &AgentPanel::goTo, this, [this](const QRectF &range) {
+        // Clicar no cartão leva a lousa até aquele trecho e o realça
+        m_canvas->resumeFollowing();
+        m_canvas->followTo(range);
+        m_canvas->flashArea(range);
+    });
+    connect(&m_ai, &AiClient::started, this, [this] { m_agent->setBusy(true); });
     connect(&m_ai, &AiClient::chunk, &m_player, &LessonPlayer::appendStreamData);
     connect(&m_ai, &AiClient::finished, this, [this] {
-        m_askBar->setBusy(false);
-        m_askBar->setStatus(m_streamCommands > 0 ? QString() : "A IA não enviou nenhum comando.");
+        m_agent->setBusy(false);
+        m_agent->setStatus(m_streamCommands > 0 ? QString() : "A IA não enviou nenhum comando.");
+        m_agent->finishSegment(TimelineCard::State::Done);
         m_player.finishStream();
     });
     connect(&m_ai, &AiClient::failed, this, [this](const QString &message) {
-        m_askBar->setBusy(false);
-        m_askBar->setStatus(message);
+        m_agent->setBusy(false);
+        m_agent->setStatus(message);
+        m_agent->finishSegment(TimelineCard::State::Failed);
         logLine("erro: " + message);
         m_player.finishStream();
     });
     connect(&m_player, &LessonPlayer::commandReceived, this, [this](const QJsonObject &command) {
         ++m_streamCommands;
+        m_agent->countCommand();
         logLine(QString::fromUtf8(QJsonDocument(command).toJson(QJsonDocument::Compact)));
     });
     connect(&m_player, &LessonPlayer::stepFinished, this, [this] {
-        m_askBar->setStepPending(true);
-        m_askBar->setStatus("Fim do passo: clique em Continuar.");
+        m_agent->setStepPending(true);
+        m_agent->setStatus("Fim do passo: clique em Continuar.");
+    });
+    // Aula gravada: cada "pergunta" reconstrói um cartão da timeline
+    connect(&m_player, &LessonPlayer::question, this, [this](const QString &text) {
+        // Ao reabrir uma aula, cada resposta recomeça em área limpa, como no original
+        m_agent->beginSegment(text, m_player.startAnswer());
+    });
+    // A timeline acompanha o que foi desenhado e o que está à vista
+    connect(&m_player, &LessonPlayer::viewportRequested, this, [this](const QRectF &area) {
+        m_agent->extendSegment(area);
+    });
+    connect(m_canvas, &BoardCanvas::scrolled, this, [this](double top) {
+        m_agent->setVisibleRange(top, m_board.screenHeight());
     });
 
     // Painel de ajuste: F10 abre e fecha
@@ -184,6 +234,13 @@ MainWindow::MainWindow(QWidget *parent)
         m_tuningPanel->setValues(values);
         applyParams(values);
     });
+
+    // View: mostrar ou esconder o painel do professor (F8)
+    m_showPanel = m_titleBar->viewMenu()->addAction("Painel do professor");
+    m_showPanel->setCheckable(true);
+    m_showPanel->setChecked(true);
+    m_showPanel->setShortcut(QKeySequence(Qt::Key_F8));
+    connect(m_showPanel, &QAction::toggled, m_agent, &QWidget::setVisible);
 
     // Modo de depuração: F12 mostra/esconde as bounding boxes e ids
     auto *toggleDebug = new QShortcut(QKeySequence(Qt::Key_F12), this);
@@ -237,10 +294,32 @@ void MainWindow::updateOverlay()
 void MainWindow::askAi(const QString &question)
 {
     logLine("> " + question);
-    m_askBar->setStatus("Perguntando...");
+    m_agent->setStatus("Perguntando...");
     m_streamCommands = 0;
-    m_player.startStream(); // lousa limpa: começa uma aula nova
+    // A resposta continua a mesma aula, mas sempre numa área limpa
+    m_player.startStream(false);
+    m_answerTop = m_player.startAnswer();
+    m_player.appendCommand(QJsonObject{{"tipo", "pergunta"}, {"texto", question}});
+    m_agent->beginSegment(question, m_answerTop);
     m_ai.ask(question);
+}
+
+void MainWindow::newLesson()
+{
+    if (!m_agent->isEmpty() || !m_player.lessonText().isEmpty()) {
+        const auto answer = QMessageBox::question(this, "Nova aula",
+                                                  "Isto limpa a lousa e a timeline. Continuar?",
+                                                  QMessageBox::Yes | QMessageBox::No);
+        if (answer != QMessageBox::Yes)
+            return;
+    }
+    m_ai.stop();
+    m_ai.clearHistory();
+    m_agent->clearTimeline();
+    m_agent->setStatus(QString());
+    m_log->clear();
+    QStringList errors;
+    m_player.applyText(QString(), &errors);
 }
 
 void MainWindow::logLine(const QString &text)

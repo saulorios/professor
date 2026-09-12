@@ -22,6 +22,7 @@ struct SceneElement {
     QPointF anchor;               // ponto de referência (centro do círculo, do texto...)
     bool obstacle = true;         // a caixa inteira é obstáculo
     std::vector<Polyline> marks;  // quando a caixa não vale: o traço em si (linhas, setas)
+    std::vector<QRectF> lines;    // texto quebrado: a caixa de cada linha (para o sublinhado)
 };
 
 // Motor de layout. O padrão é o FLUXO: quem não traz posicionamento vai abaixo
@@ -46,8 +47,13 @@ public:
 
     // Área útil de uma tela do canvas (a faixa da legenda não entra: é overlay)
     QRectF screenArea(int screen) const;
+    int screenOf(const QRectF &box) const;
     QRectF usableArea() const { return screenArea(m_screen); }
     QRectF canvasArea() const;
+    // Largura máxima de um texto: a da coluna atual (nada ultrapassa a lousa)
+    double textWidth() const;
+    // Área útil da tela onde esta caixa está
+    QRectF areaFor(const QRectF &box) const { return screenArea(screenOf(box)); }
 
     int screen() const { return m_screen; }
     int screenCount() const { return m_screens; }
@@ -63,7 +69,7 @@ public:
     bool setColumn(const QString &which); // "esquerda", "direita" ou "unica"
     void newScreen();
 
-    Placement place(const QJsonObject &command, const QRectF &local, const QPointF &localAnchor,
+    Placement place(const QJsonObject &command, const QRectF &raw, const QPointF &localAnchor,
                     const std::vector<SceneElement> &elements, Role role = Role::Body);
 
     static const SceneElement *find(const std::vector<SceneElement> &elements, const QString &id);
@@ -72,7 +78,6 @@ private:
     QRectF columnRect(int screen, int column) const;
     // Tela nova por falta de espaço: mantém as colunas que a aula pediu
     void overflowScreen();
-    int screenOf(const QRectF &box) const;
     void growTo(int screen);
     // Refaz a grade a partir dos elementos, menos o que pode ser tocado de propósito
     void rebuildGrid(const std::vector<SceneElement> &elements, const SceneElement *allowed);

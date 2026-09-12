@@ -85,7 +85,13 @@ Espera antes de continuar. Use após momentos importantes.
 - `fonte`: `"normal"` (padrão) ou `"cursiva"`. Use cursiva só em títulos ou
   destaques; fórmulas sempre em normal.
 - Índices: `H_2O` vira H₂O; expoentes: `x^2` vira x². Use `{}` para agrupar: `e^{-x}`.
-- Evite textos longos: lousa é para palavras-chave e fórmulas, a explicação vai na `fala`.
+- **A lousa é para títulos, palavras-chave, fórmulas e rótulos curtos.** Texto com
+  mais de ~40 caracteres provavelmente deveria ser uma `fala`, não algo escrito.
+  O motor quebra em linhas o que não couber na coluna, mas encher a lousa de
+  frases é desperdiçar o espaço e a atenção do aluno.
+- Símbolos matemáticos (⇔, ⇒, ≤, ≥, ≠, √, π, Δ, Σ, ∫, ∞, ±, ×, ·) podem ser
+  escritos diretamente: os que a fonte de giz não traz são compostos pelo motor,
+  como já acontece com ° e ·.
 
 ### Formas 2D
 
@@ -188,6 +194,13 @@ Cada ponto é `[x, y, pressao]` ou `[x, y, pressao, t]`, com `t` em segundos
 desde o início do traço; com `t`, a mão refaz o traço no tempo original.
 **Uso interno de aulas gravadas. A IA NÃO deve gerar este comando.**
 
+```
+{"tipo":"pergunta","texto":"explique o volume do cubo"}
+```
+Marca onde uma pergunta do aluno começou, para o painel do professor reconstruir
+a timeline ao reabrir a aula. Não desenha nada.
+**Uso interno. A IA NÃO deve gerar este comando.**
+
 ### Apagar
 
 ```
@@ -234,6 +247,14 @@ desenhos; a explicação vai na `fala`, que não ocupa espaço.
 errado: {"tipo":"escrever","texto":"O logaritmo de um produto é a soma dos logaritmos das parcelas"}
 certo:  {"tipo":"escrever","texto":"log(a·b) = log a + log b"}
         {"tipo":"fala","texto":"O logaritmo de um produto é a soma dos logaritmos."}
+```
+
+**Escrever a frase inteira em vez da fórmula.** A frase explica; a lousa registra.
+
+```
+errado: {"tipo":"escrever","texto":"u, v independentes <=> a·u + b·v = 0 implica a = b = 0"}
+certo:  {"tipo":"fala","texto":"Dizer que u e v são independentes significa que a única combinação que dá zero é a trivial."}
+        {"tipo":"escrever","texto":"a·u + b·v = 0  ⇒  a = b = 0"}
 ```
 
 **Repetir o que já está escrito acima.** O aluno pode rolar de volta; reescrever
@@ -304,8 +325,8 @@ colunas e uma aplicação depois de `nova_tela`. Nenhuma coordenada, nenhum
 ```
 {"tipo":"escrever","id":"titulo","texto":"Logaritmo","tamanho":8}
 {"tipo":"fala","texto":"Logaritmo é a pergunta: qual expoente leva a base até o número?"}
-{"tipo":"escrever","texto":"log_a(b) = x  <=>  a^x = b","tamanho":5}
-{"tipo":"escrever","texto":"a > 0, a diferente de 1, b > 0","tamanho":3}
+{"tipo":"escrever","texto":"log_a(b) = x  ⇔  a^x = b","tamanho":5}
+{"tipo":"escrever","texto":"a > 0, a ≠ 1, b > 0","tamanho":3}
 {"tipo":"fala","texto":"A base tem que ser positiva e diferente de 1."}
 {"tipo":"linha"}
 {"tipo":"escrever","texto":"Exemplo","tamanho":5}
@@ -324,7 +345,7 @@ colunas e uma aplicação depois de `nova_tela`. Nenhuma coordenada, nenhum
 {"tipo":"nova_tela"}
 {"tipo":"escrever","texto":"Para que serve","tamanho":6}
 {"tipo":"escrever","texto":"pH = -log[H^+]"}
-{"tipo":"escrever","texto":"[H^+] = 10^{-3}  =>  pH = 3"}
+{"tipo":"escrever","texto":"[H^+] = 10^{-3}  ⇒  pH = 3"}
 {"tipo":"fala","texto":"O pH é um logaritmo: cada unidade é dez vezes mais ácido."}
 {"tipo":"fim_passo"}
 ```

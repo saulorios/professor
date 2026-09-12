@@ -29,6 +29,7 @@ struct HumanizerParams {
     double pauseWord = 70.0;         // micro-pausa entre palavras (ms)
     double pauseComma = 130.0;       // depois de vírgula, ponto e vírgula, dois pontos
     double pauseStop = 220.0;        // depois de ponto, exclamação, interrogação
+    double pauseLine = 260.0;        // ao mudar de linha num texto quebrado
     double cursiveScale = 0.5;       // a cursiva usa metade da intensidade
     std::uint32_t seed = 7;          // seed da aula
 };

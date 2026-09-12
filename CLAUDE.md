@@ -211,6 +211,11 @@ seguinte — o motor não troca de coluna por conta própria.
   Linhas, setas, conexões, destaques e traços do mouse **não** são obstáculos de
   caixa, mas marcam a grade ao longo do próprio traço (`strokeThickness`), para
   que nenhum texto caia em cima deles.
+- **Cinto de segurança**: antes de mais nada, um elemento maior que a área útil
+  é reduzido até caber, com aviso — vale para texto, formas, objetos 3D, cotas,
+  rótulos e destaques. A cota passa pelo layout como um bloco rígido (continua
+  paralela à aresta, mas não sai da área nem cai sobre nada) e o destaque, que
+  abraça o alvo, é aparado na área útil.
 - Ordem das tentativas, sem exceções: (1) deslocar na direção do posicionamento;
   (2) espaço livre mais próximo na tela atual; (3) tela limpa adiante (o canvas
   cresce); (4) só então reduzir a escala do elemento, com aviso. **Não existe
@@ -324,6 +329,17 @@ resto; com 0 a saída é exatamente a da fonte (regressão).
   índice e expoente com `_` e `^` no próximo caractere ou no grupo `{…}`
   (H_2O, x^2, e^{-x}): 60% do tamanho, deslocados para baixo/para cima.
   Constantes em `SceneParams` (bloco "Texto").
+- **Nada ultrapassa a largura da coluna.** O texto quebra em linhas, preferindo,
+  nesta ordem: o espaço entre palavras; um operador (⇔, =, +, −, ·, /), que fica
+  no fim da linha e é repetido no começo da seguinte, como se faz em matemática;
+  e, em último caso, o hífen entre letras. Índices, expoentes e grupos `{…}`
+  nunca são partidos. Uma palavra indivisível maior que a coluna é reduzida, com
+  aviso. As linhas alinham pela primeira e o entrelinhamento é `lineSpacing`
+  (1,4 × a altura da letra); a mão respira ao mudar de linha
+  (`HumanizerParams::pauseLine`). O elemento continua sendo UM só, com a caixa
+  cobrindo todas as linhas, e `destacar sublinhar` sublinha uma a uma.
+- Símbolos que a fonte Hershey não traz (⇔, ⇒, ≤, ≥, ≠, √, π, Δ, Σ, ∫, ∞, ±, ×, ∈)
+  são desenhados pelo `HersheyFont`, como já era feito com ° e ·.
 - A mão escreve com `Motion::Writing`: um pouco mais rápida que nas formas
   (`writingSpeed`) e com levantada de giz menor entre traços (`writingPenLiftMs`).
 
@@ -362,10 +378,22 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
   acompanhamento, tem tempo limite por inatividade (`idleTimeoutMs`), trata erro
   de rede e `stop()` cancela o reply em andamento. Endereço do proxy em
   `AiClientParams::url`, sobreposto pela variável `LOUSA_PROXY`.
-- `ui/AskBar`: campo de pergunta na barra inferior (Enter ou Ctrl+Enter envia),
-  botões "Perguntar", "Parar", "Continuar" (só aparece no `fim_passo`) e "Log",
-  que abre o painel recolhível com cada comando recebido — útil para depurar as
-  respostas da IA. Recados de erro e de estado ficam à direita da barra.
+- `ui/AgentPanel`: painel lateral direito (largura 320, splitter, F8 ou
+  View > "Painel do professor"). Cabeçalho "Professor" com nova aula (+),
+  histórico e fechar; no meio a **timeline**, um cartão por pergunta com o
+  resumo do que foi desenhado ("18 comandos · 42 s") e o estado (desenhando,
+  concluído, parado, erro); no rodapé o campo de pergunta (cresce até 4 linhas,
+  Ctrl+Enter ou a seta envia), os botões Parar, Continuar (só no `fim_passo`) e
+  Log, e o aviso de que a IA pode errar. A barra de baixo da janela ficou só com
+  os controles de reprodução.
+- Cada cartão guarda a faixa de Y do canvas onde a resposta foi desenhada:
+  clicar nele rola a lousa até lá (animado) e realça o trecho por 1 s; o cartão
+  do trecho à vista fica destacado, inclusive quando se rola a lousa à mão.
+- Toda pergunta começa em área limpa (`Scene::startFreshScreen`), então cada
+  resposta tem a sua região e a timeline bate com a lousa.
+- A timeline é salva junto com a aula: um comando `{"tipo":"pergunta"}` antes
+  dos comandos da resposta (uso interno, documentado no protocolo). Ao reabrir
+  o `.jsonl`, os cartões e as faixas são reconstruídos.
 - `fim_passo` é tratado pela `CommandQueue` (sinal `stepFinished`); o botão
   "Continuar" envia `continue` e a aula segue **sem limpar a lousa**, para a IA
   poder referenciar os ids já desenhados. Uma pergunta nova limpa a lousa.

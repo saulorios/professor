@@ -59,6 +59,11 @@ void Layout::reset()
     m_pen[0] = m_pen[1] = screenArea(0).top();
 }
 
+double Layout::textWidth() const
+{
+    return columnRect(m_screen, m_column).width();
+}
+
 void Layout::include(const QRectF &area)
 {
     if (area.isNull())
@@ -219,13 +224,27 @@ void Layout::noteOccupied(const QRectF &box)
     m_grid.markBox(box);
 }
 
-Layout::Placement Layout::place(const QJsonObject &command, const QRectF &local, const QPointF &localAnchor,
+Layout::Placement Layout::place(const QJsonObject &command, const QRectF &raw, const QPointF &localAnchor,
                                 const std::vector<SceneElement> &elements, Role role)
 {
     const QString who = describe(command);
     QPointF offset;
     QPointF direction(0.0, 1.0);           // para onde afastar em caso de colisão
     const SceneElement *allowed = nullptr; // o único elemento que pode ser tocado
+
+    // --- Cinto de segurança: nada é maior que a área útil, em nenhum eixo ---
+    double scale = 1.0;
+    QRectF local = raw;
+    {
+        const QRectF area = screenArea(m_screen);
+        if (local.width() > area.width() + kEpsilon || local.height() > area.height() + kEpsilon) {
+            scale = std::max(m_params.minScale, std::min(area.width() / std::max(local.width(), kEpsilon),
+                                                         area.height() / std::max(local.height(), kEpsilon)));
+            qWarning().noquote() << QString("Layout: %1 — maior que a área útil; reduzido para %2%")
+                                        .arg(who, QString::number(scale * 100.0, 'f', 0));
+            local = QRectF(localAnchor + (raw.topLeft() - localAnchor) * scale, raw.size() * scale);
+        }
+    }
 
     QString side;
     for (const QString &key : kSides)
@@ -359,23 +378,22 @@ Layout::Placement Layout::place(const QJsonObject &command, const QRectF &local,
         // (4) só então, reduzir o elemento
         if (!placed) {
             const QRectF nextArea = screenArea(screen);
-            const double scale = std::max(m_params.minScale,
+            qWarning().noquote() << QString("Layout: %1 — não cabe em nenhuma tela; reduzido").arg(who);
+            const double extra = std::max(m_params.minScale,
                                           std::min(nextArea.width() / std::max(box.width(), kEpsilon),
                                                    nextArea.height() / std::max(box.height(), kEpsilon)));
-            qWarning().noquote() << QString("Layout: %1 — não cabe em nenhuma tela; reduzido para %2%")
-                                        .arg(who, QString::number(scale * 100.0, 'f', 0));
-            const QRectF scaled(localAnchor + (local.topLeft() - localAnchor) * scale, local.size() * scale);
+            const QRectF scaled(localAnchor + (local.topLeft() - localAnchor) * extra, local.size() * extra);
             QRectF small = pushInside(scaled.translated(offset), nextArea);
             if (nearestFree(nextArea, small.size(), small.topLeft(), &found))
                 small.moveTopLeft(found);
             noteOccupied(small);
             // O chamador escala em torno do ponto de referência e depois translada
-            return {small.topLeft() - scaled.topLeft(), scale};
+            return {small.topLeft() - scaled.topLeft(), scale * extra};
         }
     }
 
     noteOccupied(box);
-    return {box.topLeft() - local.topLeft(), 1.0};
+    return {box.topLeft() - local.topLeft(), scale};
 }
 
 QPointF Layout::anchorOffset(const QString &anchor, const QRectF &local, QPointF *direction) const

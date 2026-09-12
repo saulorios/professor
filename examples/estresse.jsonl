@@ -5,7 +5,7 @@
 {"tipo":"escrever","texto":"x^2 + y^2 = r^2"}
 {"tipo":"forma","forma":"circulo","raio":6}
 {"tipo":"escrever","texto":"circunferência"}
-{"tipo":"escrever","texto":"A = pi·r^2"}
+{"tipo":"escrever","texto":"A = π·r^2"}
 {"tipo":"forma","forma":"retangulo","largura":24,"altura":10}
 {"tipo":"escrever","texto":"retângulo"}
 {"tipo":"escrever","texto":"A = b · h"}
@@ -46,7 +46,7 @@
 {"tipo":"objeto_3d","vista":"cavaleira","partes":[{"solido":"caixa","tamanho":[20,20,20]}]}
 {"tipo":"escrever","texto":"V = a^3"}
 {"tipo":"escrever","texto":"A = 6a^2"}
-{"tipo":"escrever","texto":"d = a·raiz(3)"}
+{"tipo":"escrever","texto":"d = a·√3"}
 {"tipo":"forma","forma":"arco","raio":8,"angulo_inicio":0,"angulo_fim":180}
 {"tipo":"escrever","texto":"semicircunferência"}
 {"tipo":"escrever","texto":"Resumo","tamanho":5}

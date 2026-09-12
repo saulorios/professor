@@ -123,80 +123,172 @@ PlayerBar QLabel {
     font-size: 12px;
 }
 
-/* Barra de perguntas à IA, acima da barra do player */
-AskBar {
+/* Painel do professor (F8), à direita da lousa */
+AgentPanel {
     background-color: #1F1F1F;
     border: none;
-    border-top: 1px solid #2B2B2B;
+    border-left: 1px solid #2B2B2B;
 }
 
-#AskField {
+#BodySplitter::handle {
+    background-color: #2B2B2B;
+}
+
+#AgentHeader {
+    background-color: #1F1F1F;
+    border-bottom: 1px solid #2B2B2B;
+}
+
+#AgentTitle {
+    background: transparent;
+    color: #CCCCCC;
+    font-size: 13px;
+}
+
+#AgentIcon {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    min-width: 24px;
+    max-width: 24px;
+    min-height: 24px;
+    color: #CCCCCC;
+    font-size: 13px;
+}
+
+#AgentIcon:hover {
+    background-color: #2A2D2E;
+}
+
+#AgentTimeline,
+#AgentTimelineContent {
+    background-color: #1F1F1F;
+    border: none;
+}
+
+#AgentTimeline QScrollBar:vertical {
+    background: transparent;
+    width: 8px;
+    margin: 0;
+}
+
+#AgentTimeline QScrollBar::handle:vertical {
+    background: rgba(204, 204, 204, 55);
+    border-radius: 3px;
+    min-height: 30px;
+    margin: 2px;
+}
+
+#AgentTimeline QScrollBar::add-line:vertical,
+#AgentTimeline QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+#AgentTimeline QScrollBar::add-page:vertical,
+#AgentTimeline QScrollBar::sub-page:vertical {
+    background: none;
+}
+
+/* Cartão de uma pergunta na timeline */
+#TimelineCard {
     background-color: #252526;
     border: 1px solid #2B2B2B;
     border-radius: 6px;
-    padding: 5px 10px;
+}
+
+#TimelineCard:hover {
+    border-color: #37373D;
+}
+
+#TimelineCard[atual="true"] {
+    background-color: #2A2D2E;
+    border-color: #0078D4;
+}
+
+#CardQuestion {
+    background: transparent;
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+#CardSummary {
+    background: transparent;
+    color: #8A8A8A;
+    font-size: 11px;
+}
+
+#AgentFooter {
+    background-color: #1F1F1F;
+    border-top: 1px solid #2B2B2B;
+}
+
+#AgentInput {
+    background-color: #252526;
+    border: 1px solid #2B2B2B;
+    border-radius: 6px;
+    padding: 4px 8px;
     color: #CCCCCC;
     font-size: 13px;
     selection-background-color: #04395E;
 }
 
-#AskField:focus {
+#AgentInput:focus {
     border: 1px solid #0078D4;
 }
 
-AskBar QPushButton {
+#AgentSend {
+    background-color: #0078D4;
+    border: none;
+    border-radius: 6px;
+    min-width: 30px;
+    max-width: 30px;
+    min-height: 30px;
+    color: #FFFFFF;
+    font-size: 13px;
+}
+
+#AgentSend:hover {
+    background-color: #1A86D9;
+}
+
+#AgentSend:disabled {
+    background-color: #252526;
+    color: #6B6B6B;
+}
+
+AgentPanel QPushButton {
     background: transparent;
     border: 1px solid #2B2B2B;
     border-radius: 6px;
-    padding: 5px 12px;
+    padding: 4px 10px;
     color: #CCCCCC;
     font-size: 12px;
 }
 
-AskBar QPushButton:hover {
+AgentPanel QPushButton:hover {
     background-color: #2A2D2E;
 }
 
-AskBar QPushButton:checked {
+AgentPanel QPushButton:checked {
     background-color: #37373D;
     color: #FFFFFF;
 }
 
-AskBar QPushButton:disabled {
+AgentPanel QPushButton:disabled {
     color: #6B6B6B;
     border-color: #252526;
 }
 
-AskBar QPushButton#AskButton {
-    background-color: #0078D4;
-    border-color: #0078D4;
-    color: #FFFFFF;
-}
-
-AskBar QPushButton#AskButton:hover {
-    background-color: #1A86D9;
-}
-
-AskBar QPushButton#AskButton:disabled {
-    background-color: #252526;
-    border-color: #2B2B2B;
-    color: #6B6B6B;
-}
-
-#AskStatus {
+#AgentStatus {
     background: transparent;
     color: #9D9D9D;
     font-size: 11px;
 }
 
-/* Log dos comandos recebidos (recolhível) */
-#LessonLog {
-    background-color: #252526;
-    border: none;
-    border-top: 1px solid #2B2B2B;
-    color: #9D9D9D;
-    font-family: "Ubuntu Mono", "Cascadia Mono", monospace;
-    font-size: 12px;
+#AgentDisclaimer {
+    background: transparent;
+    color: #6B6B6B;
+    font-size: 10px;
 }
 
 /* Editor da aula (F9) */

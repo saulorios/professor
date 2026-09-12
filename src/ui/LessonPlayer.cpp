@@ -39,6 +39,7 @@ LessonPlayer::LessonPlayer(Board &board, QObject *parent)
     });
     connect(&m_queue, &CommandQueue::speech, this, &LessonPlayer::speech);
     connect(&m_queue, &CommandQueue::stepFinished, this, &LessonPlayer::stepFinished);
+    connect(&m_queue, &CommandQueue::question, this, &LessonPlayer::question);
     connect(&m_hand, &VirtualHand::boardChanged, this, &LessonPlayer::boardChanged);
     connect(&m_hand, &VirtualHand::chalkMoved, this, &LessonPlayer::chalkMoved);
     connect(&m_hand, &VirtualHand::chalkHidden, this, &LessonPlayer::chalkHidden);
@@ -129,6 +130,11 @@ void LessonPlayer::appendCommand(const QJsonObject &command)
     m_loaded = true;
     emit commandReceived(command);
     emit stateChanged();
+}
+
+double LessonPlayer::startAnswer()
+{
+    return m_scene.startFreshScreen() * m_hand.params().pixelsPerUnit;
 }
 
 void LessonPlayer::startStream(bool clearBoard)

@@ -18,6 +18,7 @@ struct SceneParams {
     int maxScreenGrowth = 8;        // telas novas que a busca pode criar antes de desistir
     double minScale = 0.3;          // redução máxima quando nem numa tela vazia cabe
     double highlightGap = 1.0;      // folga entre o elemento e o sublinhado, círculo ou caixa
+    double underlineGap = 0.6;      // folga mínima entre o sublinhado e a linha de texto seguinte
     double strokeThickness = 1.0;   // faixa que uma linha/seta ocupa na grade
 
     // --- Fluxo (o padrão: o motor decide o "onde") ---
@@ -48,6 +49,7 @@ struct SceneParams {
     double kerning = 2.0;           // aproximação dos pares da tabela (unidades da fonte)
     double tracking = -2.0;         // ajuste do espaço entre letras (unidades da fonte; < 0 aproxima)
     double cursiveTracking = 0.0;   // na cursiva as letras se emendam nos próprios limites
+    double lineSpacing = 1.4;       // entrelinhamento, em alturas de letra
 
     // --- Objetos 3D (comando "objeto_3d") ---
     double cavalierAngle = 45.0;      // "cavaleira": ângulo do eixo da profundidade

@@ -129,6 +129,41 @@ bool applyStrokeOrder(QChar character, HersheyGlyph &glyph)
     return true;
 }
 
+// Símbolos matemáticos que a fonte de giz não traz, desenhados em unidades da
+// fonte (Y para baixo; linha de base em 9, topo das maiúsculas em -12)
+struct Symbol {
+    char16_t character;
+    double left;
+    double right;
+    std::vector<Polyline> strokes;
+};
+
+const std::vector<Symbol> &mathSymbols()
+{
+    static const std::vector<Symbol> symbols = {
+        {u'≠', -10, 10, {{{-8, -5}, {8, -5}}, {{-8, 1}, {8, 1}}, {{5, -9}, {-5, 5}}}},
+        {u'≤', -10, 10, {{{7, -9}, {-7, -3}, {7, 3}}, {{-7, 6}, {7, 6}}}},
+        {u'≥', -10, 10, {{{-7, -9}, {7, -3}, {-7, 3}}, {{-7, 6}, {7, 6}}}},
+        {u'⇒', -11, 11, {{{-9, -5}, {6, -5}}, {{-9, 1}, {6, 1}}, {{3, -9}, {9, -2}, {3, 5}}}},
+        {u'⇔', -12, 12, {{{-7, -5}, {7, -5}},
+                         {{-7, 1}, {7, 1}},
+                         {{4, -9}, {10, -2}, {4, 5}},
+                         {{-4, -9}, {-10, -2}, {-4, 5}}}},
+        {u'→', -11, 11, {{{-9, -2}, {7, -2}}, {{3, -8}, {9, -2}, {3, 4}}}},
+        {u'√', -10, 10, {{{-9, -2}, {-6, 2}, {-2, -11}, {9, -11}}}},
+        {u'π', -9, 9, {{{-8, -8}, {8, -8}}, {{-4, -8}, {-5, 6}}, {{4, -8}, {5, 6}}}},
+        {u'Δ', -10, 10, {{{0, -12}, {8, 7}, {-8, 7}, {0, -12}}}},
+        {u'Σ', -10, 10, {{{8, -12}, {-8, -12}, {0, -2}, {-8, 8}, {8, 8}}}},
+        {u'∫', -6, 6, {{{4, -10}, {3, -12}, {0, -11}, {0, 5}, {-3, 8}, {-4, 6}}}},
+        {u'∞', -11, 11, {{{0, -2}, {-3, -6}, {-8, -5}, {-8, 1}, {-3, 2}, {0, -2},
+                          {3, -6}, {8, -5}, {8, 1}, {3, 2}, {0, -2}}}},
+        {u'±', -10, 10, {{{0, -9}, {0, 1}}, {{-7, -4}, {7, -4}}, {{-7, 6}, {7, 6}}}},
+        {u'×', -8, 8, {{{-6, -8}, {6, 4}}, {{6, -8}, {-6, 4}}}},
+        {u'∈', -10, 10, {{{8, -9}, {2, -10}, {-6, -6}, {-6, 2}, {2, 6}, {8, 5}}, {{-6, -2}, {5, -2}}}},
+    };
+    return symbols;
+}
+
 QRectF inkBounds(const std::vector<Polyline> &strokes)
 {
     bool first = true;
@@ -292,6 +327,18 @@ void HersheyFont::addComposites()
         for (QPointF &p : mark)
             p += anchor;
         glyph.strokes.push_back(mark); // o acento vem depois da letra, como à mão
+        m_glyphs.insert(character, glyph);
+    }
+
+    // Símbolos matemáticos ausentes da fonte (⇔, ≠, √, π, Σ…)
+    for (const Symbol &symbol : mathSymbols()) {
+        const QChar character(symbol.character);
+        if (m_glyphs.contains(character))
+            continue;
+        HersheyGlyph glyph;
+        glyph.left = symbol.left;
+        glyph.right = symbol.right;
+        glyph.strokes = symbol.strokes;
         m_glyphs.insert(character, glyph);
     }
 

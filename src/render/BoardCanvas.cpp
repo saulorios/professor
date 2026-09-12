@@ -108,6 +108,16 @@ BoardCanvas::BoardCanvas(Board &board, QWidget *parent)
             m_scrollTimer.stop();
     });
 
+    // Realce de um trecho, ao pular para ele pela timeline
+    m_flashTimer.setInterval(16);
+    connect(&m_flashTimer, &QTimer::timeout, this, [this] {
+        if (m_flashClock.elapsed() >= qint64(m_params.flashMs)) {
+            m_flashTimer.stop();
+            m_flash = QRectF();
+        }
+        update();
+    });
+
     // Fade do giz ao pausar ou terminar
     m_fadeTimer.setInterval(16);
     connect(&m_fadeTimer, &QTimer::timeout, this, [this] {
@@ -126,6 +136,14 @@ void BoardCanvas::clear()
     // Só o pó: o tamanho do canvas é decidido pela aula (LessonPlayer)
     m_board.clear();
     refresh();
+}
+
+void BoardCanvas::flashArea(const QRectF &canvasPixels)
+{
+    m_flash = canvasPixels;
+    m_flashClock.start();
+    m_flashTimer.start();
+    update();
 }
 
 void BoardCanvas::resumeFollowing()
@@ -322,6 +340,7 @@ void BoardCanvas::applyScroll(double canvasPixels, bool fromUser)
     rebuildView();
     updateChrome();
     update();
+    emit scrolled(m_scroll);
 }
 
 // --- Composição da faixa visível -------------------------------------------
@@ -386,6 +405,24 @@ void BoardCanvas::paintEvent(QPaintEvent *)
     painter.setRenderHint(QPainter::SmoothPixmapTransform);
     const QRectF board = boardRect();
     painter.drawImage(board, m_view);
+
+    // Realce do trecho escolhido na timeline: um contorno fino que some
+    if (!m_flash.isNull()) {
+        const double t = std::clamp(1.0 - double(m_flashClock.elapsed()) / std::max(m_params.flashMs, 1.0),
+                                    0.0, 1.0);
+        const qreal s = board.width() / m_view.width();
+        const QRectF rect(board.left(), board.top() + (m_flash.top() - m_viewTop) * s,
+                          board.width(), m_flash.height() * s);
+        painter.save();
+        painter.setRenderHint(QPainter::Antialiasing);
+        QPen pen(m_params.flashColor);
+        pen.setCosmetic(true);
+        painter.setOpacity(t);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRoundedRect(rect.adjusted(2, 2, -2, -2), 6, 6);
+        painter.restore();
+    }
 
     // Giz da mão virtual, por cima da lousa e fora do DepositBuffer
     if (m_chalkVisible && m_giz.visible) {

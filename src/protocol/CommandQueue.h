@@ -31,6 +31,7 @@ public:
 
 signals:
     void speech(const QString &text);
+    void question(const QString &text); // "pergunta": reconstrói a timeline
     void stepFinished(); // "fim_passo": a IA espera o aluno pedir para continuar
     void idle();         // a fila esvaziou e o último comando terminou
 

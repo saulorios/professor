@@ -168,6 +168,11 @@ std::vector<HandStroke> Humanizer::apply(const std::vector<Polyline> &strokes, c
     for (const Polyline &stroke : strokes)
         out.push_back({stroke, pressure, 1.0, 1.0, 0.0});
 
+    // A mão respira ao passar para a linha seguinte (isto não depende da intensidade)
+    for (std::size_t i = 1; i < runs.size(); ++i)
+        if (runs[i].line != runs[i - 1].line && runs[i].first < out.size())
+            out[runs[i].first].pauseBeforeMs = m_params.pauseLine;
+
     const double k = std::clamp(m_params.intensity, 0.0, 1.0) * (cursive ? m_params.cursiveScale : 1.0);
     if (k <= 0.0)
         return out; // intensidade 0: exatamente o que veio da fonte
@@ -261,7 +266,7 @@ std::vector<HandStroke> Humanizer::apply(const std::vector<Polyline> &strokes, c
             pause = m_params.pauseComma;
         else if (before == '.' || before == '!' || before == '?')
             pause = m_params.pauseStop;
-        out[run.first].pauseBeforeMs = pause * k;
+        out[run.first].pauseBeforeMs = std::max(out[run.first].pauseBeforeMs, pause * k);
     }
     return out;
 }

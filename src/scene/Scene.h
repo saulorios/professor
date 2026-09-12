@@ -51,6 +51,9 @@ public:
     double canvasHeight() const { return m_layout.canvasHeight(); }
     bool contains(const QString &id) const { return Layout::find(m_elements, id) != nullptr; }
     QRectF bounds(const QString &id) const;
+    // Leva o fluxo para uma tela limpa se a atual já tiver conteúdo; devolve o
+    // topo da área útil onde a próxima resposta vai começar (unidades)
+    double startFreshScreen();
     SceneDebugGeometry debugGeometry() const;
 
 signals:
@@ -77,9 +80,10 @@ private:
     // Depois de colocar um elemento: cresce o canvas e leva a vista até ele
     void reveal(const QRectF &bounds);
 
-    // Texto já humanizado, com a linha de base em y = 0 e começando em x = 0
-    std::vector<HandStroke> writing(const QString &text, double size, bool cursive,
-                                    PressureLevel pressure) const;
+    // Texto já quebrado em linhas e humanizado, com a linha de base da primeira
+    // linha em y = 0 e começando em x = 0. `lines` recebe a caixa de cada linha.
+    std::vector<HandStroke> writing(const QString &text, double size, bool cursive, PressureLevel pressure,
+                                    double maxWidth, std::vector<QRectF> *lines = nullptr) const;
 
     const Object3DInfo *findObject(const QString &id) const;
     void forgetObject(const QString &id);

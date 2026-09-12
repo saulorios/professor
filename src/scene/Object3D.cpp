@@ -517,7 +517,7 @@ bool Object3DBuilder::build(const QJsonObject &command, const std::vector<SceneE
             }
             paths.push_back(std::move(path));
         } else if (shape == "texto") {
-            const std::vector<Polyline> text = m_text.layout(decal.value("texto").toString(), 1.0);
+            const std::vector<Polyline> text = m_text.layout(decal.value("texto").toString(), 1.0).strokes;
             const QRectF box = Geometry2D::bounds(text);
             if (box.isEmpty())
                 continue;

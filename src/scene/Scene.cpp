@@ -174,6 +174,18 @@ void Scene::reset()
     emit elementsChanged();
 }
 
+double Scene::startFreshScreen()
+{
+    const QRectF area = m_layout.usableArea();
+    const bool used = std::any_of(m_elements.begin(), m_elements.end(),
+                                  [&area](const SceneElement &e) { return e.bounds.intersects(area); });
+    if (used)
+        m_layout.newScreen();
+    emit canvasHeightChanged(m_layout.canvasHeight());
+    emit ensureVisible(m_layout.usableArea());
+    return m_layout.usableArea().top();
+}
+
 void Scene::flowCommand(const QJsonObject &command)
 {
     const QString type = command.value("tipo").toString();
@@ -309,16 +321,17 @@ void Scene::drawShape(const QJsonObject &command)
     submit(command, lines, solid);
 }
 
-std::vector<HandStroke> Scene::writing(const QString &text, double size, bool cursive,
-                                       PressureLevel pressure) const
+std::vector<HandStroke> Scene::writing(const QString &text, double size, bool cursive, PressureLevel pressure,
+                                       double maxWidth, std::vector<QRectF> *lines) const
 {
-    QString missing;
-    std::vector<GlyphRun> runs;
-    const std::vector<Polyline> raw =
-        (cursive ? m_cursiveLayout : m_textLayout).layout(text, size, &missing, &runs);
-    if (!missing.isEmpty())
-        qWarning().noquote() << "Caracteres sem glifo ignorados:" << missing;
-    return m_humanizer.apply(raw, runs, pressure, cursive);
+    const TextBlock block = (cursive ? m_cursiveLayout : m_textLayout).layout(text, size, maxWidth);
+    if (!block.missing.isEmpty())
+        qWarning().noquote() << "Caracteres sem glifo ignorados:" << block.missing;
+    if (block.shrunk)
+        qWarning().noquote() << QString("Texto \"%1\": palavra maior que a coluna, reduzida para caber").arg(text);
+    if (lines)
+        *lines = block.lines;
+    return m_humanizer.apply(block.strokes, block.runs, pressure, cursive);
 }
 
 void Scene::writeText(const QJsonObject &command)
@@ -337,7 +350,10 @@ void Scene::writeText(const QJsonObject &command)
     if (command.contains("tamanho") && (!json::readNumber(command, "tamanho", &size) || size <= 0))
         return fail("escrever: 'tamanho' deve ser um número > 0");
 
-    std::vector<HandStroke> strokes = writing(text, size, cursive, pressureLevel(command));
+    // Nada ultrapassa a coluna: o texto quebra em linhas
+    std::vector<QRectF> lines;
+    std::vector<HandStroke> strokes =
+        writing(text, size, cursive, pressureLevel(command), m_layout.textWidth(), &lines);
     if (strokes.empty())
         return fail("escrever: nenhum caractere desenhável");
 
@@ -354,6 +370,13 @@ void Scene::writeText(const QJsonObject &command)
     SceneElement element;
     element.bounds = Geometry2D::bounds(polylinesOf(strokes));
     element.anchor = element.bounds.center();
+    // Cada linha do texto, já posicionada (o "destacar sublinhar" usa isto)
+    for (QRectF line : lines) {
+        if (placement.scale != 1.0)
+            line = QRectF(local.center() + (line.topLeft() - local.center()) * placement.scale,
+                          line.size() * placement.scale);
+        element.lines.push_back(line.translated(placement.offset));
+    }
     store(command, element, QString("\"%1\"").arg(text));
     reveal(element.bounds);
     m_waitingHand = true;
@@ -406,15 +429,33 @@ void Scene::highlight(const QJsonObject &command)
     const QString mode = command.value("modo").toString();
     const QRectF r = target->bounds;
     const double gap = m_params.highlightGap;
+    // O destaque abraça o alvo, então não pode ser deslocado: em vez disso, ele
+    // é aparado para não passar da área útil
+    const QRectF area = m_layout.areaFor(r);
+    const auto clamp = [&area](const QPointF &p) {
+        return QPointF(std::clamp(p.x(), area.left(), area.right()),
+                       std::clamp(p.y(), area.top(), area.bottom()));
+    };
     std::vector<Polyline> lines;
     if (mode == "sublinhar") {
-        lines.push_back(m_geometry.line({r.left(), r.bottom() + gap}, {r.right(), r.bottom() + gap}));
+        // Texto quebrado em várias linhas: sublinha uma por uma, sem encostar na
+        // linha de baixo
+        const std::vector<QRectF> targets = target->lines.size() > 1 ? target->lines : std::vector<QRectF>{r};
+        for (std::size_t i = 0; i < targets.size(); ++i) {
+            double y = targets[i].bottom() + gap;
+            if (i + 1 < targets.size())
+                y = std::min(y, targets[i + 1].top() - m_params.underlineGap);
+            lines.push_back(m_geometry.line(clamp({targets[i].left(), y}), clamp({targets[i].right(), y})));
+        }
     } else if (mode == "circular") {
         // Elipse que passa pelos cantos da caixa (com folga): envolve o elemento todo
         const QRectF box = r.adjusted(-gap, -gap, gap, gap);
-        lines.push_back(m_geometry.ellipse(box.center(), box.width() / 2 * kSqrt2, box.height() / 2 * kSqrt2));
+        const QPointF center = box.center();
+        const double rx = std::min({box.width() / 2 * kSqrt2, center.x() - area.left(), area.right() - center.x()});
+        const double ry = std::min({box.height() / 2 * kSqrt2, center.y() - area.top(), area.bottom() - center.y()});
+        lines.push_back(m_geometry.ellipse(center, std::max(rx, 0.5), std::max(ry, 0.5)));
     } else if (mode == "caixa") {
-        const QRectF box = r.adjusted(-gap, -gap, gap, gap);
+        const QRectF box = r.adjusted(-gap, -gap, gap, gap).intersected(area);
         lines.push_back(m_geometry.rectangle(box.center(), box.width(), box.height()));
     } else {
         return fail(QString("destacar: modo '%1' desconhecido (sublinhar, circular ou caixa)").arg(mode));
@@ -525,7 +566,8 @@ void Scene::labelVertex(const QJsonObject &command)
     const QString text = command.value("texto").toString();
     if (text.trimmed().isEmpty())
         return fail("rotular precisa de 'texto'");
-    std::vector<HandStroke> strokes = writing(text, m_params.labelSize, false, pressureLevel(command));
+    std::vector<HandStroke> strokes =
+        writing(text, m_params.labelSize, false, pressureLevel(command), m_layout.textWidth());
     if (strokes.empty())
         return fail("rotular: nenhum caractere desenhável");
 
@@ -618,7 +660,8 @@ void Scene::dimensionEdge(const QJsonObject &command)
     for (const Polyline &line : lines)
         strokes.push_back({line, pressureLevel(command), 1.0, 1.0, 0.0});
 
-    std::vector<HandStroke> label = writing(text, m_params.dimensionTextSize, false, pressureLevel(command));
+    std::vector<HandStroke> label =
+        writing(text, m_params.dimensionTextSize, false, pressureLevel(command), m_layout.textWidth());
     if (!label.empty()) {
         const QRectF local = Geometry2D::bounds(polylinesOf(label));
         const double reach = std::abs(normal.x()) * local.width() / 2 + std::abs(normal.y()) * local.height() / 2;
@@ -626,6 +669,16 @@ void Scene::dimensionEdge(const QJsonObject &command)
         translate(label, at - local.center());
         strokes.insert(strokes.end(), label.begin(), label.end());
     }
+
+    // A cota é rígida (fica paralela à aresta), mas nem ela pode sair da área
+    // útil ou cair em cima de algo: o layout desliza o conjunto inteiro
+    const QRectF local = Geometry2D::bounds(polylinesOf(strokes));
+    QJsonObject placed = command;
+    placed["em"] = QJsonArray{local.center().x(), local.center().y()};
+    const Layout::Placement placement = m_layout.place(placed, local, local.center(), m_elements);
+    if (placement.scale != 1.0)
+        scaleAbout(strokes, local.center(), placement.scale);
+    translate(strokes, placement.offset);
 
     SceneElement element;
     element.bounds = Geometry2D::bounds(polylinesOf(strokes));
@@ -720,8 +773,12 @@ void Scene::store(const QJsonObject &command, SceneElement element, const QStrin
         const auto old = std::find_if(m_elements.begin(), m_elements.end(),
                                       [&](const SceneElement &e) { return e.id == element.id; });
         if (old != m_elements.end()) {
-            qWarning().noquote() << "Id repetido:" << element.id << "- o elemento anterior foi substituído";
-            m_elements.erase(old);
+            // O giz do anterior continua na lousa: ele perde o id, mas segue
+            // ocupando o lugar dele (senão o motor desenharia por cima)
+            qWarning().noquote() << "Id repetido:" << element.id
+                                 << "- o anterior perdeu o id, mas continua na lousa";
+            old->id.clear();
+            old->label += " (id reusado)";
         }
     }
     m_elements.push_back(element);
