@@ -33,6 +33,7 @@ struct BoardCanvasParams {
     // Rolagem
     int scrollAnimationMs = 600;      // uma tela inteira leva isto (rolagem automática)
     double wheelStep = 90.0;          // px do canvas por "clique" da roda
+    double revealMargin = 24.0;       // folga ao trazer algo para a vista (px do canvas)
     int scrollBarWidth = 8;
 
     // Modo de depuração (F12)
@@ -98,6 +99,9 @@ public slots:
 
     // O canvas cresceu ou voltou a uma tela só
     void canvasChanged();
+
+    // Aula nova: o motor volta a mandar na vista (desfaz a rolagem manual)
+    void resumeFollowing();
 
     // Rolagem imediata (usuário) e animada (motor)
     void setScroll(double canvasPixels);

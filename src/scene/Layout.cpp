@@ -59,6 +59,13 @@ void Layout::reset()
     m_pen[0] = m_pen[1] = screenArea(0).top();
 }
 
+void Layout::include(const QRectF &area)
+{
+    if (area.isNull())
+        return;
+    growTo(std::max(0, int(std::floor(std::max(0.0, area.bottom() - kEpsilon) / m_params.boardHeight))));
+}
+
 void Layout::newLine()
 {
     m_pen[m_column] += m_params.flowLineHeight;

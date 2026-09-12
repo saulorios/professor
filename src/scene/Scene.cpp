@@ -463,6 +463,8 @@ void Scene::drawFreeStroke(const QJsonObject &command)
     element.anchor = element.bounds.center();
     element.obstacle = false; // um rabisco não ocupa a sua bounding box inteira
     element.marks = {line};   // mas o traço em si entra na grade de ocupação
+    // O traço já vem em coordenadas do canvas: a lousa cresce até caber nele
+    m_layout.include(element.bounds);
     store(command, element, "traço livre");
     reveal(element.bounds);
     m_waitingHand = true;

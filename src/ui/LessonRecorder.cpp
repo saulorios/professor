@@ -69,13 +69,13 @@ void LessonRecorder::beginStroke()
     m_start = 0.0;
 }
 
-void LessonRecorder::addSample(const QPointF &boardPixels, float pressure, double timeMs)
+void LessonRecorder::addSample(const QPointF &canvasPixels, float pressure, double timeMs)
 {
     if (!m_recording || !m_inStroke)
         return;
     if (m_points.empty())
         m_start = timeMs;
-    m_points.push_back(boardPixels / m_params.pixelsPerUnit);
+    m_points.push_back(canvasPixels / m_params.pixelsPerUnit); // já em coordenadas do canvas
     m_pressure.push_back(pressure);
     m_time.push_back(timeMs - m_start);
 }

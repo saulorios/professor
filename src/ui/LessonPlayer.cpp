@@ -142,6 +142,8 @@ void LessonPlayer::startStream(bool clearBoard)
         emit boardChanged();
         emit speech(QString());
     }
+    if (clearBoard)
+        emit lessonRestarted();
     m_streaming = true;
     m_loaded = true;
     m_finished = false;
@@ -208,6 +210,7 @@ void LessonPlayer::startFromBeginning()
     m_board.reset();
     m_scene.reset();
     emit canvasResized();
+    emit lessonRestarted();
     emit boardChanged();
     emit speech(QString());
 

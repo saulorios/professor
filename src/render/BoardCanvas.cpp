@@ -128,6 +128,13 @@ void BoardCanvas::clear()
     refresh();
 }
 
+void BoardCanvas::resumeFollowing()
+{
+    m_userScrolled = false;
+    m_pending = QRectF();
+    m_below->hide();
+}
+
 void BoardCanvas::canvasChanged()
 {
     if (m_scroll > maxScroll()) {
@@ -255,24 +262,25 @@ void BoardCanvas::scrollToScreen(int screen, bool animated)
 
 void BoardCanvas::followTo(const QRectF &canvasRect)
 {
-    m_pending = canvasRect;
+    // Uma folga em volta: o elemento não fica colado na borda da tela
+    const QRectF area = canvasRect.adjusted(0.0, -m_params.revealMargin, 0.0, m_params.revealMargin);
+    m_pending = area;
     const double screen = m_board.screenHeight();
     // Já está à vista? Então não há nada a fazer
-    if (canvasRect.top() >= m_scroll - 0.5 && canvasRect.bottom() <= m_scroll + screen + 0.5) {
+    if (area.top() >= m_scroll - 0.5 && area.bottom() <= m_scroll + screen + 0.5) {
         m_below->hide();
         return;
     }
     if (m_userScrolled) {
         // O usuário assumiu a rolagem: avisa, mas não arrasta a vista
-        m_below->setText(canvasRect.top() < m_scroll ? "continuando acima ↑" : "continuando abaixo ↓");
+        m_below->setText(area.top() < m_scroll ? "continuando acima ↑" : "continuando abaixo ↓");
         m_below->show();
         updateChrome();
         return;
     }
     // Mostra a faixa pedida, encostando o topo dela no topo da tela quando não cabe
-    const double target = canvasRect.height() >= screen || canvasRect.top() < m_scroll
-                              ? canvasRect.top()
-                              : canvasRect.bottom() - screen;
+    const double target = area.height() >= screen || area.top() < m_scroll ? area.top()
+                                                                           : area.bottom() - screen;
     animateTo(std::clamp(target, 0.0, maxScroll()));
 }
 

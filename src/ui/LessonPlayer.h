@@ -68,6 +68,7 @@ signals:
     void chalkMoved(const ChalkPose &pose); // giz visível na tela
     void chalkHidden();
     void canvasResized();                          // a lousa cresceu (ou voltou a uma tela)
+    void lessonRestarted();                        // aula nova: o motor reassume a vista
     void viewportRequested(const QRectF &canvasPixels); // o motor quer mostrar esta faixa
 
 private:

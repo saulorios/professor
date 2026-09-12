@@ -99,7 +99,7 @@ Dois conceitos distintos:
 - Se o usuário rolou por conta própria e a escrita continua fora da vista,
   aparece um aviso clicável ("continuando abaixo ↓") em vez de arrastá-la à
   força; clicar devolve o controle ao motor. Se ele não tocou em nada, a vista
-  segue a escrita sozinha.
+  segue a escrita sozinha. Começar uma aula devolve o controle ao motor.
 - O mouse e a caneta desenham na posição do **canvas**, não na da tela.
 
 ## Física do giz (`src/physics/`)
@@ -287,8 +287,10 @@ resto; com 0 a saída é exatamente a da fonte (regressão).
 - File > "Gravar traços" (Ctrl+R) grava o que for desenhado com o mouse ou a
   caneta; um indicador discreto aparece no canto da lousa. `ui/LessonRecorder`
   transforma cada traço em um comando `traco_livre`, com os pontos em unidades
-  da lousa simplificados por Douglas-Peucker (tolerância 0,2 u) e guardando a
-  pressão e o instante de cada ponto que sobrou.
+  do **canvas** (a rolagem já somada: gravar com a lousa rolada guarda a posição
+  certa) simplificados por Douglas-Peucker (tolerância 0,2 u) e guardando a
+  pressão e o instante de cada ponto que sobrou. Ao reproduzir, a lousa cresce
+  até caber o traço (`Layout::include`) e a vista rola até ele.
 - `traco_livre` é do protocolo (documentado em `docs/ia-protocol.md` com a nota
   de que a IA não deve gerá-lo). Ao reproduzir, `VirtualHand::drawRecorded`
   refaz o traço com o tempo e a pressão originais: sem perfil de velocidade,

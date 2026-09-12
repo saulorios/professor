@@ -29,9 +29,10 @@ public:
     int strokeCount() const { return m_count; }
 
 public slots:
-    // Ligados aos sinais da lousa (só o giz; o apagador não é gravado)
+    // Ligados aos sinais da lousa (só o giz; o apagador não é gravado).
+    // As posições chegam em pixels do CANVAS, com a rolagem já somada.
     void beginStroke();
-    void addSample(const QPointF &boardPixels, float pressure, double timeMs);
+    void addSample(const QPointF &canvasPixels, float pressure, double timeMs);
     void endStroke();
 
 signals:

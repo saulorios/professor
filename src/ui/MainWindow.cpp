@@ -91,6 +91,7 @@ MainWindow::MainWindow(QWidget *parent)
     connect(&m_player, &LessonPlayer::chalkHidden, m_canvas, &BoardCanvas::hideChalk);
     // A lousa rola: o canvas cresce e a vista acompanha a escrita
     connect(&m_player, &LessonPlayer::canvasResized, m_canvas, &BoardCanvas::canvasChanged);
+    connect(&m_player, &LessonPlayer::lessonRestarted, m_canvas, &BoardCanvas::resumeFollowing);
     connect(&m_player, &LessonPlayer::viewportRequested, m_canvas, &BoardCanvas::followTo);
     connect(&m_player, &LessonPlayer::speech, m_canvas, &BoardCanvas::setCaption);
     connect(&m_player, &LessonPlayer::stateChanged, playerBar, [this, playerBar] {

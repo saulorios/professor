@@ -53,6 +53,10 @@ public:
     int screenCount() const { return m_screens; }
     double canvasHeight() const { return m_screens * m_params.boardHeight; }
 
+    // Faz o canvas caber esta área, para geometria que não passa pelo layout
+    // (traços gravados, que já vêm em coordenadas do canvas)
+    void include(const QRectF &area);
+
     // Comandos de fluxo
     void reset();
     void newLine();
