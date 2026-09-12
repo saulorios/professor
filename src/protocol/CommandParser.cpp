@@ -43,6 +43,9 @@ void CommandParser::parseLine(QByteArray line)
     line = line.trimmed(); // também remove o '\r' de arquivos do Windows
     if (line.isEmpty())
         return;
+    // Modelos menos obedientes embrulham a resposta em ```json ... ```
+    if (line.startsWith("```"))
+        return;
 
     QJsonParseError error;
     const QJsonDocument document = QJsonDocument::fromJson(line, &error);

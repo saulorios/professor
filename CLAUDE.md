@@ -220,15 +220,25 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
 ```
 
 - `proxy/servidor.py` (FastAPI + uvicorn, fora do app): `POST /aula` recebe
-  `{"mensagens":[{"papel":"usuario|professor","texto":"..."}]}`, chama a API em
+  `{"mensagens":[{"papel":"usuario|professor","texto":"..."}]}`, chama a IA em
   modo streaming usando `docs/ia-protocol.md` como system prompt e devolve
-  **apenas o texto gerado**, em `text/plain` chunked. A chave vem da variável
-  de ambiente `ANTHROPIC_API_KEY` (ou de um `.env` na pasta `proxy/`, fora do
-  git) e **nunca** entra no app C++. `GET /saude`
-  confere a configuração sem gastar tokens. Erros da API viram 502 com
-  `{"detail": ...}` antes de o fluxo começar (401 faria o Qt pedir
-  autenticação e esconder a mensagem). Modelo e limite: `LOUSA_MODELO` e
-  `LOUSA_MAX_TOKENS`. Instruções em `proxy/README.md`.
+  **apenas o texto gerado**, em `text/plain` chunked. A chave vem do ambiente
+  ou de um `.env` na pasta `proxy/` (fora do git) e **nunca** entra no app C++.
+  `GET /saude` confere a configuração sem gastar tokens. Erros da API viram 502
+  com `{"detail": ...}` antes de o fluxo começar (401 faria o Qt pedir
+  autenticação e esconder a mensagem). Instruções em `proxy/README.md`.
+- **Qual IA responde é escolha do proxy** (`LOUSA_PROVEDOR`); o app não muda:
+  `anthropic` (biblioteca oficial, `ANTHROPIC_API_KEY`), `openrouter`
+  (`OPENROUTER_API_KEY`, tem modelos gratuitos terminados em `:free`) e
+  `openai`, que é qualquer endpoint no formato OpenAI — Ollama, LM Studio,
+  Groq, DeepSeek — com `LOUSA_URL` e `LOUSA_CHAVE` (opcional em servidor
+  local). Os dois últimos usam o mesmo adaptador SSE (`httpx`), que lê
+  `choices[0].delta.content`. Sem `LOUSA_PROVEDOR`, vale `openrouter` se houver
+  `OPENROUTER_API_KEY`, senão `anthropic`. Outras variáveis: `LOUSA_MODELO`
+  (obrigatória fora da Anthropic), `LOUSA_MAX_TOKENS`, `LOUSA_TEMPO_LIMITE`.
+- Modelos menores nem sempre obedecem ao protocolo: linhas que não são JSON
+  válido já eram ignoradas com aviso, e o `CommandParser` também descarta as
+  cercas ```` ```json ```` que eles costumam pôr em volta da resposta.
 - `protocol/AiClient`: `QNetworkAccessManager` (assíncrono, sem threads). Cada
   `readyRead` repassa o pedaço cru ao `CommandParser`, que já sabe juntar linhas
   cortadas: o desenho começa na primeira linha completa, sem esperar o fim da
@@ -328,7 +338,7 @@ Para a aula com IA, rode antes o proxy (a chave fica só nele):
 ```bash
 cd proxy
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-cp .env.exemplo .env    # e ponha a chave no .env (ou exporte no terminal)
+cp .env.exemplo .env    # provedor, chave e modelo (ou exporte no terminal)
 .venv/bin/uvicorn servidor:app --port 8000
 ```
 
