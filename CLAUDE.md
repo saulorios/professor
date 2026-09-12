@@ -222,8 +222,9 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
 - `proxy/servidor.py` (FastAPI + uvicorn, fora do app): `POST /aula` recebe
   `{"mensagens":[{"papel":"usuario|professor","texto":"..."}]}`, chama a API em
   modo streaming usando `docs/ia-protocol.md` como system prompt e devolve
-  **apenas o texto gerado**, em `text/plain` chunked. A chave fica na variável
-  de ambiente `ANTHROPIC_API_KEY` e **nunca** entra no app C++. `GET /saude`
+  **apenas o texto gerado**, em `text/plain` chunked. A chave vem da variável
+  de ambiente `ANTHROPIC_API_KEY` (ou de um `.env` na pasta `proxy/`, fora do
+  git) e **nunca** entra no app C++. `GET /saude`
   confere a configuração sem gastar tokens. Erros da API viram 502 com
   `{"detail": ...}` antes de o fluxo começar (401 faria o Qt pedir
   autenticação e esconder a mensagem). Modelo e limite: `LOUSA_MODELO` e
@@ -325,9 +326,10 @@ Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 Para a aula com IA, rode antes o proxy (a chave fica só nele):
 
 ```bash
-cd proxy && pip install -r requirements.txt
-export ANTHROPIC_API_KEY=sk-ant-...
-uvicorn servidor:app --port 8000
+cd proxy
+python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+cp .env.exemplo .env    # e ponha a chave no .env (ou exporte no terminal)
+.venv/bin/uvicorn servidor:app --port 8000
 ```
 
 ## Arquivos de referência

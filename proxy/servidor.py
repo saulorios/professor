@@ -19,8 +19,25 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+PASTA = Path(__file__).resolve().parent
+
+
+def carregar_env(caminho: Path) -> None:
+    """Lê um .env simples (CHAVE=valor por linha). O ambiente tem prioridade."""
+    if not caminho.exists():
+        return
+    for linha in caminho.read_text(encoding="utf-8").splitlines():
+        linha = linha.strip()
+        if not linha or linha.startswith("#") or "=" not in linha:
+            continue
+        chave, valor = linha.split("=", 1)
+        os.environ.setdefault(chave.strip(), valor.strip().strip("\"'"))
+
+
+carregar_env(PASTA / ".env")
+
 # O protocolo do projeto é o system prompt da professora
-PROTOCOLO = Path(__file__).resolve().parent.parent / "docs" / "ia-protocol.md"
+PROTOCOLO = PASTA.parent / "docs" / "ia-protocol.md"
 MODELO = os.environ.get("LOUSA_MODELO", "claude-sonnet-5")
 MAX_TOKENS = int(os.environ.get("LOUSA_MAX_TOKENS", "4000"))
 

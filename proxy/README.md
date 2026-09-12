@@ -13,16 +13,36 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+O editor (Pyrefly, Pylance…) precisa apontar para esse `.venv/bin/python`, senão
+ele procura `fastapi` e `anthropic` no Python do sistema e reclama que não existem.
+
+## A chave
+
+Duas formas, o ambiente ganha da primeira:
+
+1. Arquivo `.env` nesta pasta (não vai para o git):
+
+```bash
+cp .env.exemplo .env
+$EDITOR .env            # ANTHROPIC_API_KEY=sk-ant-...
+```
+
+2. Ou direto no terminal que roda o servidor:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...       # obrigatório
+export LOUSA_MODELO=claude-sonnet-5       # opcional
+export LOUSA_MAX_TOKENS=4000              # opcional
+```
+
 ## Rodar
 
 ```bash
-export ANTHROPIC_API_KEY=sk-ant-...       # obrigatório; fica só aqui
-export LOUSA_MODELO=claude-sonnet-5       # opcional
-export LOUSA_MAX_TOKENS=4000              # opcional
-uvicorn servidor:app --port 8000
+.venv/bin/uvicorn servidor:app --port 8000
 ```
 
-Confira com `curl http://127.0.0.1:8000/saude`.
+Confira com `curl http://127.0.0.1:8000/saude`: `"chave": true` quer dizer que o
+servidor achou a chave.
 
 ## API
 
