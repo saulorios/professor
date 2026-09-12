@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "AskBar.h"
 #include "PlayerBar.h"
 #include "TitleBar.h"
 #include "TuningPanel.h"
@@ -13,7 +14,9 @@
 #include <QHoverEvent>
 #include <QMenu>
 #include <QMessageBox>
+#include <QJsonDocument>
 #include <QMouseEvent>
+#include <QPlainTextEdit>
 #include <QShortcut>
 #include <QVBoxLayout>
 #include <QWindow>
@@ -45,6 +48,16 @@ MainWindow::MainWindow(QWidget *parent)
     m_tuningPanel = new TuningPanel(m_body);
     m_tuningPanel->hide();
     auto *playerBar = new PlayerBar(m_body);
+    m_askBar = new AskBar(m_body);
+
+    // Log dos comandos recebidos (recolhível, útil para depurar a IA)
+    m_log = new QPlainTextEdit(m_body);
+    m_log->setObjectName("LessonLog");
+    m_log->setReadOnly(true);
+    m_log->setFocusPolicy(Qt::NoFocus);
+    m_log->setMaximumBlockCount(m_params.logMaxLines);
+    m_log->setFixedHeight(m_params.logHeight);
+    m_log->hide();
 
     auto *boardRow = new QHBoxLayout;
     boardRow->setContentsMargins(0, 0, 0, 0);
@@ -56,6 +69,8 @@ MainWindow::MainWindow(QWidget *parent)
     bodyLayout->setContentsMargins(0, 0, 0, 0);
     bodyLayout->setSpacing(0);
     bodyLayout->addLayout(boardRow, 1);
+    bodyLayout->addWidget(m_log);
+    bodyLayout->addWidget(m_askBar);
     bodyLayout->addWidget(playerBar);
     setCentralWidget(m_body);
 
@@ -69,6 +84,42 @@ MainWindow::MainWindow(QWidget *parent)
     connect(playerBar, &PlayerBar::pauseClicked, &m_player, &LessonPlayer::pause);
     connect(playerBar, &PlayerBar::restartClicked, &m_player, &LessonPlayer::restart);
     connect(playerBar, &PlayerBar::speedChanged, &m_player, &LessonPlayer::setSpeed);
+
+    // Aula pela IA: o proxy guarda a chave; aqui só chega texto, em pedaços
+    connect(m_askBar, &AskBar::asked, this, &MainWindow::askAi);
+    connect(m_askBar, &AskBar::stopRequested, this, [this] {
+        m_ai.stop();
+        m_askBar->setStatus("Resposta interrompida.");
+    });
+    connect(m_askBar, &AskBar::continueRequested, this, [this] {
+        logLine("> continue");
+        m_askBar->setStatus("Perguntando...");
+        m_streamCommands = 0;
+        m_player.startStream(false); // continua a mesma aula, sem limpar a lousa
+        m_ai.continueLesson();
+    });
+    connect(m_askBar, &AskBar::logToggled, m_log, &QWidget::setVisible);
+    connect(&m_ai, &AiClient::started, this, [this] { m_askBar->setBusy(true); });
+    connect(&m_ai, &AiClient::chunk, &m_player, &LessonPlayer::appendStreamData);
+    connect(&m_ai, &AiClient::finished, this, [this] {
+        m_askBar->setBusy(false);
+        m_askBar->setStatus(m_streamCommands > 0 ? QString() : "A IA não enviou nenhum comando.");
+        m_player.finishStream();
+    });
+    connect(&m_ai, &AiClient::failed, this, [this](const QString &message) {
+        m_askBar->setBusy(false);
+        m_askBar->setStatus(message);
+        logLine("erro: " + message);
+        m_player.finishStream();
+    });
+    connect(&m_player, &LessonPlayer::commandReceived, this, [this](const QJsonObject &command) {
+        ++m_streamCommands;
+        logLine(QString::fromUtf8(QJsonDocument(command).toJson(QJsonDocument::Compact)));
+    });
+    connect(&m_player, &LessonPlayer::stepFinished, this, [this] {
+        m_askBar->setStepPending(true);
+        m_askBar->setStatus("Fim do passo: clique em Continuar.");
+    });
 
     // Painel de ajuste: F10 abre e fecha
     auto *toggleTuning = new QShortcut(QKeySequence(Qt::Key_F10), this);
@@ -127,6 +178,20 @@ void MainWindow::updateOverlay()
     for (const QPointF &point : geometry.vanishingPoints)
         points.push_back(point * pixelsPerUnit);
     m_canvas->setOverlayGeometry(lines, points);
+}
+
+void MainWindow::askAi(const QString &question)
+{
+    logLine("> " + question);
+    m_askBar->setStatus("Perguntando...");
+    m_streamCommands = 0;
+    m_player.startStream(); // lousa limpa: começa uma aula nova
+    m_ai.ask(question);
+}
+
+void MainWindow::logLine(const QString &text)
+{
+    m_log->appendPlainText(text);
 }
 
 void MainWindow::openLesson()

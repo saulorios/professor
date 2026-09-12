@@ -2,11 +2,14 @@
 
 #include "LessonPlayer.h"
 #include "physics/Board.h"
+#include "protocol/AiClient.h"
 
 #include <QMainWindow>
 #include <QSize>
 
+class AskBar;
 class BoardCanvas;
+class QPlainTextEdit;
 class TitleBar;
 class TuningPanel;
 struct TunableParams;
@@ -16,6 +19,8 @@ struct MainWindowParams {
     QSize initialSize{1280, 800};
     QSize minimumSize{800, 500};
     int resizeMargin = 5; // largura (px) da faixa junto às bordas que permite redimensionar
+    int logHeight = 150;  // altura do painel de log (recolhível)
+    int logMaxLines = 500;
 };
 
 // Janela principal sem moldura nativa: TitleBar customizada + body com a lousa,
@@ -36,6 +41,10 @@ protected:
 private:
     void openLesson();
 
+    // Aula vinda da IA (pelo proxy) e log dos comandos recebidos
+    void askAi(const QString &question);
+    void logLine(const QString &text);
+
     // Modo de depuração (F12): bounding boxes e ids dos elementos da cena
     void updateOverlay();
 
@@ -53,7 +62,11 @@ private:
     MainWindowParams m_params;
     Board m_board;          // estado físico compartilhado por mouse e mão virtual
     LessonPlayer m_player;
+    AiClient m_ai;
     TitleBar *m_titleBar = nullptr;
+    AskBar *m_askBar = nullptr;
+    QPlainTextEdit *m_log = nullptr;
+    int m_streamCommands = 0; // comandos recebidos na resposta atual
     QWidget *m_body = nullptr;
     BoardCanvas *m_canvas = nullptr;
     TuningPanel *m_tuningPanel = nullptr;

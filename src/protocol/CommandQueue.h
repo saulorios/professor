@@ -31,7 +31,8 @@ public:
 
 signals:
     void speech(const QString &text);
-    void idle(); // a fila esvaziou e o último comando terminou
+    void stepFinished(); // "fim_passo": a IA espera o aluno pedir para continuar
+    void idle();         // a fila esvaziou e o último comando terminou
 
 private:
     void startNext();

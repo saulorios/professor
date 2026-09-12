@@ -11,8 +11,9 @@
 
 class Board;
 
-// Reproduz uma aula a partir de um arquivo .jsonl (sem IA e sem rede):
-// arquivo → CommandParser → CommandQueue → Scene → VirtualHand → física.
+// Reproduz uma aula, vinda de um arquivo .jsonl ou da IA:
+// texto → CommandParser → CommandQueue → Scene → VirtualHand → física.
+// No modo streaming cada comando é desenhado assim que a linha chega inteira.
 class LessonPlayer : public QObject
 {
     Q_OBJECT
@@ -22,6 +23,13 @@ public:
 
     // Carrega a aula e começa a reproduzir; em erro de leitura devolve false e a mensagem
     bool open(const QString &path, QString *error);
+
+    // Aula que chega aos poucos (da IA). `clearBoard` false continua a aula
+    // atual, mantendo o que já está na lousa (resposta a "fim_passo").
+    void startStream(bool clearBoard = true);
+    void appendStreamData(const QByteArray &data);
+    void finishStream();
+    bool isStreaming() const { return m_streaming; }
 
     void play();
     void pause();
@@ -42,6 +50,8 @@ signals:
     void speech(const QString &text);  // legenda atual ("" apaga)
     void boardChanged();               // a mão alterou o depósito de giz
     void stateChanged();
+    void commandReceived(const QJsonObject &command); // para o log da aula
+    void stepFinished();               // a IA terminou um passo e espera
 
 private:
     void startFromBeginning();
@@ -56,4 +66,5 @@ private:
     bool m_loaded = false;
     bool m_playing = false;
     bool m_finished = false;
+    bool m_streaming = false;          // a aula ainda está chegando pela rede
 };

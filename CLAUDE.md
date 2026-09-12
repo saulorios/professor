@@ -19,10 +19,11 @@ Mouse, mesa digitalizadora e IA alimentam exatamente o mesmo pipeline de física
 ## Arquitetura (5 camadas, uma pasta por camada)
 
 ```
-IA (via proxy que guarda a API key)
+IA (via proxy/ , que guarda a API key)
    │  JSON Lines: 1 comando semântico por linha (ver docs/ia-protocol.md)
    ▼
-src/protocol/  → parser incremental de JSON Lines, validação, fila de comandos
+src/protocol/  → cliente da IA (AiClient), parser incremental de JSON Lines,
+                 validação, fila de comandos
    ▼
 src/scene/     → layout (posições relativas, âncoras, ids), geometria 2D,
                  texto (fontes Hershey), sólidos 3D (solids/), projeção e
@@ -35,8 +36,8 @@ src/physics/   → física do giz: Board, BoardSurface, ChalkStick, DepositBuffe
                  StrokeEngine, Eraser
    ▼
 src/render/    → BoardCanvas: desenha o DepositBuffer na tela
-src/ui/        → MainWindow, TitleBar, PlayerBar, LessonPlayer, TuningPanel e
-                 demais widgets
+src/ui/        → MainWindow, TitleBar, PlayerBar, AskBar, LessonPlayer,
+                 TuningPanel e demais widgets
 ```
 
 ### Regras de dependência (importante)
@@ -210,6 +211,41 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - A mão escreve com `Motion::Writing`: um pouco mais rápida que nas formas
   (`writingSpeed`) e com levantada de giz menor entre traços (`writingPenLiftMs`).
 
+## Aula com IA de verdade (proxy + `protocol/AiClient`)
+
+```
+AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
+                       ↑ texto em pedaços (chunked)
+                 CommandParser → CommandQueue → Scene → mão → física
+```
+
+- `proxy/servidor.py` (FastAPI + uvicorn, fora do app): `POST /aula` recebe
+  `{"mensagens":[{"papel":"usuario|professor","texto":"..."}]}`, chama a API em
+  modo streaming usando `docs/ia-protocol.md` como system prompt e devolve
+  **apenas o texto gerado**, em `text/plain` chunked. A chave fica na variável
+  de ambiente `ANTHROPIC_API_KEY` e **nunca** entra no app C++. `GET /saude`
+  confere a configuração sem gastar tokens. Erros da API viram 502 com
+  `{"detail": ...}` antes de o fluxo começar (401 faria o Qt pedir
+  autenticação e esconder a mensagem). Modelo e limite: `LOUSA_MODELO` e
+  `LOUSA_MAX_TOKENS`. Instruções em `proxy/README.md`.
+- `protocol/AiClient`: `QNetworkAccessManager` (assíncrono, sem threads). Cada
+  `readyRead` repassa o pedaço cru ao `CommandParser`, que já sabe juntar linhas
+  cortadas: o desenho começa na primeira linha completa, sem esperar o fim da
+  resposta. Guarda o histórico da conversa (`maxMessages`) para perguntas de
+  acompanhamento, tem tempo limite por inatividade (`idleTimeoutMs`), trata erro
+  de rede e `stop()` cancela o reply em andamento. Endereço do proxy em
+  `AiClientParams::url`, sobreposto pela variável `LOUSA_PROXY`.
+- `ui/AskBar`: campo de pergunta na barra inferior (Enter ou Ctrl+Enter envia),
+  botões "Perguntar", "Parar", "Continuar" (só aparece no `fim_passo`) e "Log",
+  que abre o painel recolhível com cada comando recebido — útil para depurar as
+  respostas da IA. Recados de erro e de estado ficam à direita da barra.
+- `fim_passo` é tratado pela `CommandQueue` (sinal `stepFinished`); o botão
+  "Continuar" envia `continue` e a aula segue **sem limpar a lousa**, para a IA
+  poder referenciar os ids já desenhados. Uma pergunta nova limpa a lousa.
+- `LessonPlayer` ganhou o modo streaming (`startStream`/`appendStreamData`/
+  `finishStream`): cada comando vai para a fila assim que a linha chega, e
+  "Reiniciar" redesenha o que já veio.
+
 ## Objetos 3D (`objeto_3d`, `rotular`, `cotar`)
 
 O objeto é montado como modelo 3D de arestas e faces, projetado para 2D **uma
@@ -286,6 +322,14 @@ cmake --build build -j
 
 Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 
+Para a aula com IA, rode antes o proxy (a chave fica só nele):
+
+```bash
+cd proxy && pip install -r requirements.txt
+export ANTHROPIC_API_KEY=sk-ant-...
+uvicorn servidor:app --port 8000
+```
+
 ## Arquivos de referência
 
 - `docs/ia-protocol.md` — system prompt da IA professora e especificação completa
@@ -301,5 +345,5 @@ Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 - [x] Etapa 3 — Texto com fontes Hershey
 - [x] Etapa 4 — Motor de layout
 - [x] Etapa 5 — Objetos 3D em perspectiva
-- [ ] Etapa 6 — Cliente de rede e IA
+- [x] Etapa 6 — Cliente de rede e IA
 - [ ] Etapa 7 — Renderização em OpenGL (opcional)

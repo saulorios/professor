@@ -14,7 +14,7 @@ endif()
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets)
 
 # Avisos do compilador ativados em todos os alvos; no MSVC, fontes lidos como UTF-8
 if(MSVC)
@@ -83,19 +83,24 @@ add_library(scene STATIC
 )
 target_link_libraries(scene PUBLIC hand Qt6::Gui)
 
-# protocol/: parser de JSON Lines e fila de comandos
+# protocol/: parser de JSON Lines, fila de comandos e cliente da IA
+# (QtNetwork entra por causa do QNetworkAccessManager do AiClient)
 add_library(protocol STATIC
     src/protocol/CommandParser.h
     src/protocol/CommandParser.cpp
     src/protocol/CommandQueue.h
     src/protocol/CommandQueue.cpp
+    src/protocol/AiClient.h
+    src/protocol/AiClient.cpp
 )
-target_link_libraries(protocol PUBLIC scene)
+target_link_libraries(protocol PUBLIC scene Qt6::Network)
 
 add_executable(lousa
     src/main.cpp
     src/render/BoardCanvas.h
     src/render/BoardCanvas.cpp
+    src/ui/AskBar.h
+    src/ui/AskBar.cpp
     src/ui/LessonPlayer.h
     src/ui/LessonPlayer.cpp
     src/ui/MainWindow.h

@@ -83,6 +83,10 @@ void CommandQueue::startNext()
         // Não bloqueia: a legenda aparece e o próximo comando já começa
         emit speech(command.value("texto").toString());
         finishLater();
+    } else if (type == "fim_passo") {
+        // Fim de um passo da aula: quem manda continuar é o aluno
+        emit stepFinished();
+        finishLater();
     } else if (type == "pausa") {
         m_inPause = true;
         m_pauseRemainingMs = std::max(0.0, command.value("segundos").toDouble()) * 1000.0;

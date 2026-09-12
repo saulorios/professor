@@ -4,3 +4,7 @@ build/
 # Configurações locais do Qt Creator
 .qtcreator/
 CMakeLists.txt.user*
+
+# Proxy em Python
+proxy/__pycache__/
+proxy/.venv/
