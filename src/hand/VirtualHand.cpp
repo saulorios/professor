@@ -114,9 +114,11 @@ void VirtualHand::erase(const QRectF &area)
     emit chalkHidden(); // quem está na mão agora é o apagador
 
     // Zigue-zague horizontal cobrindo a área (com margem), dentro da lousa
+    // O canvas rola: a altura útil é a do canvas inteiro, não a de uma tela
+    const QSizeF canvas(m_boardUnits.width(), m_board.canvasHeight() / m_params.pixelsPerUnit);
     const QRectF r = area.adjusted(-m_params.eraserMargin, -m_params.eraserMargin,
                                    m_params.eraserMargin, m_params.eraserMargin)
-                         .intersected(QRectF(QPointF(0, 0), m_boardUnits));
+                         .intersected(QRectF(QPointF(0, 0), canvas));
     if (!r.isEmpty()) {
         Polyline zigzag;
         const double spacing = m_params.eraserRowSpacing;

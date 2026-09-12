@@ -27,6 +27,18 @@ public:
 
     const PhysicsParams &params() const { return m_params; }
 
+    // Altura do canvas em pixels (múltiplo da altura de uma tela)
+    int canvasHeight() const { return deposit.height(); }
+    int screenHeight() const { return m_params.boardHeight; }
+
+    // Faz o canvas crescer até caber esta altura; devolve true se cresceu.
+    // Chame só entre traços: o crescimento realoca os buffers da física.
+    bool ensureHeight(int height)
+    {
+        surface.ensureHeight(height);
+        return deposit.ensureHeight(height);
+    }
+
     // Troca os parâmetros; a resolução da lousa é fixa (buffers já alocados).
     // Devolve true se a superfície foi regenerada (a tela precisa recompor o fundo).
     bool setParams(const PhysicsParams &p)
@@ -49,10 +61,18 @@ public:
         return surfaceChanged;
     }
 
-    // Zera todo o depósito e troca o giz por um novo
+    // Zera todo o depósito e troca o giz por um novo (mantém o tamanho do canvas)
     void clear()
     {
         deposit.clear();
+        chalk.reset();
+    }
+
+    // Volta ao canvas de uma tela só, vazio
+    void reset()
+    {
+        deposit.reset();
+        surface.reset();
         chalk.reset();
     }
 

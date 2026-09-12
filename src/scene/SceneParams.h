@@ -5,16 +5,26 @@
 // Constantes ajustáveis da cena. Tudo em unidades da lousa (graus nos ângulos),
 // exceto onde indicado "unidades da fonte".
 struct SceneParams {
-    double boardWidth = 160.0;
-    double boardHeight = 90.0;
-    double margin = 4.0;            // distância da área útil até as bordas (e até a faixa da legenda)
+    double boardWidth = 160.0;      // largura do canvas
+    double boardHeight = 90.0;      // altura de UMA TELA; o canvas cresce em telas
+    double margin = 4.0;            // distância da área útil até as bordas
 
     // --- Layout ---
-    double captionBandHeight = 5.0; // faixa reservada à legenda da fala, na base da lousa
+    // A faixa da legenda é overlay da tela, não faz parte do canvas: não ocupa área útil
+    double captionBandHeight = 5.0; // altura da faixa da legenda, na tela
     double relativeMargin = 3.0;    // "margem" padrão de abaixo_de/acima_de/direita_de/esquerda_de
     double collisionGap = 1.0;      // folga ao afastar um elemento de outro
-    int maxCollisionAttempts = 10;  // depois disso a sobreposição é aceita (com aviso)
+    double collisionStep = 1.0;     // passo da busca por espaço livre (= célula da grade)
+    int maxScreenGrowth = 8;        // telas novas que a busca pode criar antes de desistir
+    double minScale = 0.3;          // redução máxima quando nem numa tela vazia cabe
     double highlightGap = 1.0;      // folga entre o elemento e o sublinhado, círculo ou caixa
+    double strokeThickness = 1.0;   // faixa que uma linha/seta ocupa na grade
+
+    // --- Fluxo (o padrão: o motor decide o "onde") ---
+    double flowSpacing = 2.0;       // espaço entre um elemento e o seguinte
+    double flowLineHeight = 4.0;    // o quanto o comando "linha" pula
+    double flowColumnGap = 6.0;     // espaço entre as duas colunas
+    double flowTitleSize = 6.0;     // "escrever" deste tamanho para cima é título (centralizado)
 
     double curveTolerance = 0.03;   // desvio máximo entre a curva e a corda (amostragem adaptativa)
     int minCurveSegments = 12;      // mínimo de segmentos num círculo completo

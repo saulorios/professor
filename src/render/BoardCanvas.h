@@ -16,6 +16,8 @@
 #include <vector>
 
 class QLabel;
+class QPushButton;
+class QScrollBar;
 class QTabletEvent;
 
 // Parâmetros ajustáveis da lousa na tela
@@ -28,6 +30,11 @@ struct BoardCanvasParams {
     QColor boardColor{0x1E, 0x26, 0x21};
     QColor chalkColor{0xF2, 0xF0, 0xE6};
 
+    // Rolagem
+    int scrollAnimationMs = 600;      // uma tela inteira leva isto (rolagem automática)
+    double wheelStep = 90.0;          // px do canvas por "clique" da roda
+    int scrollBarWidth = 8;
+
     // Modo de depuração (F12)
     QColor debugBoxColor{0x4F, 0xC1, 0xFF};   // bounding boxes e ids
     QColor debugAreaColor{0xD7, 0xBA, 0x7D};  // contorno da área útil
@@ -37,14 +44,14 @@ struct BoardCanvasParams {
     int debugPointRadius = 4;
 };
 
-// Retângulo do modo de depuração, em pixels da lousa
+// Retângulo do modo de depuração, em pixels do canvas
 struct OverlayBox {
     QRectF rect;
     QString label;
     bool area = false;   // contorno da área útil (tracejado)
 };
 
-// Linha do modo de depuração, em pixels da lousa: aresta oculta de um objeto 3D
+// Linha do modo de depuração, em pixels do canvas: aresta oculta de um objeto 3D
 // ou linha fina até um ponto de fuga
 struct OverlayLine {
     QLineF line;
@@ -54,6 +61,10 @@ struct OverlayLine {
 // Lousa: converte mouse e mesa digitalizadora em ChalkSamples, alimenta a
 // física e exibe o DepositBuffer, atualizando apenas a região alterada.
 // Botão esquerdo (ou ponta da caneta) = giz; botão direito = apagador.
+//
+// O canvas é mais alto que a tela e rola: esta classe mostra só a faixa visível
+// (`scroll()` em pixels do canvas) e converte as coordenadas do mouse para o
+// canvas. A rolagem do usuário é imediata; a do motor é animada.
 class BoardCanvas : public QWidget
 {
     Q_OBJECT
@@ -66,6 +77,10 @@ public:
     const GizParams &gizParams() const { return m_giz; }
     void setGizParams(const GizParams &params);
 
+    double scroll() const { return m_scroll; }
+    int screenCount() const;
+    int currentScreen() const;
+
 public slots:
     // Limpa a lousa e troca o giz por um novo
     void clear();
@@ -73,14 +88,24 @@ public slots:
     // Recalcula no cache apenas a região alterada da física e agenda o repaint dela
     void refresh();
 
-    // Legenda na parte inferior da lousa; texto vazio esconde a legenda
+    // Legenda na parte inferior da tela; texto vazio esconde a legenda.
+    // A faixa da legenda é overlay da TELA: não faz parte do canvas.
     void setCaption(const QString &text);
-
-    // Altura (px da lousa) da faixa reservada à legenda; a legenda ocupa ao menos isso
-    void setCaptionBand(double boardPixels);
+    void setCaptionBand(double screenPixels);
 
     // Recompõe o fundo depois que a superfície da lousa foi regenerada
     void rebuildSurface();
+
+    // O canvas cresceu ou voltou a uma tela só
+    void canvasChanged();
+
+    // Rolagem imediata (usuário) e animada (motor)
+    void setScroll(double canvasPixels);
+    void scrollBy(double canvasPixels);
+    void scrollToScreen(int screen, bool animated);
+    // O motor pede para mostrar esta faixa do canvas (px). Se o usuário rolou
+    // por conta própria, em vez de arrastar a vista mostra o aviso clicável.
+    void followTo(const QRectF &canvasRect);
 
     // Modo de depuração: retângulos e rótulos desenhados por cima da lousa com
     // QPainter, fora do DepositBuffer
@@ -100,7 +125,7 @@ public slots:
 signals:
     // Traços feitos à mão pelo usuário (só o giz), para o gravador de aulas
     void freeStrokeStarted();
-    void freeSample(const QPointF &boardPixels, float pressure, double timeMs);
+    void freeSample(const QPointF &canvasPixels, float pressure, double timeMs);
     void freeStrokeFinished();
 
 protected:
@@ -109,15 +134,18 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
     void tabletEvent(QTabletEvent *event) override;
 
 private:
     enum class Tool { None, Chalk, Eraser };
 
-    // Área (em coordenadas do widget) onde a lousa 16:9 é exibida
+    // Área (em coordenadas do widget) onde a tela 16:9 é exibida
     QRectF boardRect() const;
-    QPointF toBoard(const QPointF &widgetPos) const;
-    QRect toWidget(const QRect &boardArea) const;
+    // Widget → canvas (já com a rolagem somada) e canvas → widget
+    QPointF toCanvas(const QPointF &widgetPos) const;
+    QRect toWidget(const QRect &canvasArea) const;
 
     ChalkSample mouseSample(const QMouseEvent *event) const;
     float tabletTilt(const QTabletEvent *event) const;
@@ -126,7 +154,12 @@ private:
     void moveTool(const ChalkSample &sample);
     void endTool();
 
-    void buildBaseImage();
+    double maxScroll() const;
+    void applyScroll(double canvasPixels, bool fromUser);
+    void animateTo(double canvasPixels);
+    void composeView(const QRect &canvasArea);
+    void rebuildView();
+    void updateChrome();          // barra de rolagem, indicador e aviso
     void updateCaptionGeometry();
     // Repinta a área do giz (a de antes e a de agora), em coordenadas do widget
     void refreshChalk(const ChalkPose &previous, bool hadChalk);
@@ -136,12 +169,25 @@ private:
     StrokeEngine m_stroke; // traços do mouse / caneta
     Eraser m_eraser;
 
-    QImage m_base;   // cor da lousa já variada pelo height map
-    QImage m_image;  // cache exibido na tela
+    QImage m_view;   // faixa visível já composta (largura do canvas × altura da tela)
+    int m_viewTop = 0;      // linha do canvas que está no topo de m_view
+    double m_scroll = 0.0;  // px do canvas no topo da tela
+    bool m_userScrolled = false;   // o usuário assumiu o controle da rolagem
+    QRectF m_pending;              // o que o motor quer mostrar e não está à vista
+
+    QTimer m_scrollTimer;          // animação da rolagem automática
+    QElapsedTimer m_scrollClock;
+    double m_scrollFrom = 0.0;
+    double m_scrollTo = 0.0;
+    int m_scrollDuration = 0;
+
     Tool m_tool = Tool::None;
     QLabel *m_caption = nullptr;
     QLabel *m_recording = nullptr;
-    double m_captionBandPx = 0.0;   // px da lousa
+    QLabel *m_position = nullptr;      // indicador "2/3"
+    QPushButton *m_below = nullptr;    // aviso "continuando abaixo ↓"
+    QScrollBar *m_scrollBar = nullptr;
+    double m_captionBandPx = 0.0;   // px da tela
 
     GizParams m_giz;
     ChalkPose m_chalkPose;

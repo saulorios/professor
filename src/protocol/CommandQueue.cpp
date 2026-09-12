@@ -93,6 +93,7 @@ void CommandQueue::startNext()
         startPauseTimer();
     } else if (type == "forma" || type == "escrever" || type == "conectar" || type == "destacar"
                || type == "objeto_3d" || type == "rotular" || type == "cotar" || type == "traco_livre"
+               || type == "linha" || type == "coluna" || type == "nova_tela"
                || type == "apagar" || type == "limpar") {
         m_scene.execute(command);
     } else {

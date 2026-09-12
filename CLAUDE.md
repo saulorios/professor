@@ -65,19 +65,42 @@ struct ChalkSample {
   Depois disso viram giz comum na lousa (permanente, sujeito ao apagador).
   Não existe câmera girando nem re-renderização 3D.
 
-## Sistema de coordenadas
+## Sistema de coordenadas: canvas e tela
 
-- A lousa lógica mede **160 × 90 unidades** (proporção 16:9), origem no canto
-  superior esquerdo, Y para baixo.
-- Toda a IA e a camada `scene/` trabalham em unidades da lousa.
+Dois conceitos distintos:
+
+- **Canvas**: a superfície escrita. Tem **160 unidades de largura** e a altura
+  **cresce para baixo**, em blocos de uma tela, sem limite prático além da
+  memória. Origem (0,0) no canto superior esquerdo, Y para baixo.
+- **Tela (viewport)**: a janela de **160 × 90 unidades** que o usuário vê, com
+  deslocamento vertical (`BoardCanvas::scroll()`, em pixels do canvas).
+
+- Toda a IA e a camada `scene/` trabalham em unidades do canvas.
 - A conversão unidades → pixels acontece apenas na fronteira `hand/` → `physics/`
-  (`HandParams::pixelsPerUnit`).
-- A lousa em pixels mede **1920 × 1080** (12 px por unidade), definida em
-  `PhysicsParams`. A `BoardCanvas` exibe essa imagem em 16:9, escalada e
-  centralizada no body; o resto do body fica com a cor da UI.
-- **Área útil**: 4 unidades para dentro de cada borda; embaixo, o limite é a
-  faixa reservada à legenda da fala (`SceneParams::captionBandHeight`, 5
-  unidades), e não a borda da lousa. Hoje: x 4–156, y 4–81.
+  (`HandParams::pixelsPerUnit`). Uma tela em pixels mede **1920 × 1080** (12 px
+  por unidade), em `PhysicsParams`; o canvas cresce em blocos de 1080 px.
+- `DepositBuffer` e `BoardSurface` cobrem o canvas inteiro e crescem sob demanda
+  (`ensureHeight`, sempre entre traços — o crescimento realoca os buffers). O
+  height map é gerado pela coordenada **absoluta** do pixel, então o grão da
+  lousa não muda de aparência ao rolar. Custo com 5 telas: ~40 MB de depósito e
+  ~40 MB de relevo.
+- A `BoardCanvas` compõe e mostra **apenas a faixa visível**.
+- **Área útil de cada tela**: 4 unidades para dentro das bordas — x 4–156 e,
+  na tela *n*, y de `90n+4` a `90n+86`. A faixa da legenda é overlay da tela,
+  não faz parte do canvas e **não ocupa área útil**.
+
+### Rolagem
+
+- Usuário: roda do mouse, Page Up/Down, Home, End e a barra fina à direita.
+  É imediata e faz o motor parar de arrastar a vista.
+- Motor: **animada com easing**, 600 ms por tela, como um professor girando uma
+  lousa de rolo (`Scene::ensureVisible` → `BoardCanvas::followTo`).
+- Um indicador discreto ("2/3") mostra em que parte da lousa se está.
+- Se o usuário rolou por conta própria e a escrita continua fora da vista,
+  aparece um aviso clicável ("continuando abaixo ↓") em vez de arrastá-la à
+  força; clicar devolve o controle ao motor. Se ele não tocou em nada, a vista
+  segue a escrita sozinha.
+- O mouse e a caneta desenham na posição do **canvas**, não na da tela.
 
 ## Física do giz (`src/physics/`)
 
@@ -135,8 +158,8 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
 - Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
   linha, seta, arco), `escrever`, `conectar`, `destacar`, `objeto_3d`, `rotular`,
-  `cotar`, `traco_livre`, `pausa`, `fala`, `fim_passo`, `apagar`, `limpar`. Os
-  demais geram aviso e são pulados.
+  `cotar`, `traco_livre`, `linha`, `coluna`, `nova_tela`, `pausa`, `fala`,
+  `fim_passo`, `apagar`, `limpar`. Os demais geram aviso e são pulados.
 - `scene/Scene`: guarda todos os elementos desenhados (com ou sem id) com a
   bounding box e o ponto de referência; `conectar` liga as bordas dos elementos
   (elipse inscrita na bounding box para círculos/elipses, a própria caixa para os
@@ -157,15 +180,50 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   na faixa reservada da base da lousa até a próxima fala.
 - Exemplos: `examples/formas.jsonl` (formas, conectar, apagar, limpar),
   `examples/texto.jsonl` (título, frases acentuadas e fórmulas),
-  `examples/agua.jsonl` (Exemplo 1 do protocolo: posicionamento relativo),
+  `examples/agua.jsonl` (Exemplo 1: posicionamento relativo),
+  `examples/logaritmo.jsonl` (Exemplo 4: aula inteira em fluxo, com duas colunas
+  e `nova_tela`), `examples/estresse.jsonl` (60 comandos sem posicionamento
+  nenhum: é o teste da regra de não sobrepor),
   `examples/cubo.jsonl` e `examples/casa.jsonl` (Exemplos 2 e 3) e
   `examples/solidos.jsonl` (os seis sólidos em cada uma das quatro vistas).
 
 ## Motor de layout (`scene/Layout`)
 
-- Resolve todas as formas de posicionamento da seção 3 do protocolo, em unidades
-  da lousa e dentro da área útil:
-  - `ancora`: 9 posições na área útil (`base_*` encosta na faixa da legenda).
+**Sobreposição nunca é aceitável. Se não couber, a lousa rola.**
+
+### O padrão é o fluxo
+
+Comando sem nenhum campo de posicionamento entra em **fluxo tipo documento**:
+abaixo do anterior, com `flowSpacing` (2 u) de espaço, alinhado à esquerda da
+coluna atual — títulos (`escrever` com `tamanho` ≥ `flowTitleSize`) saem
+centralizados. Quando não cabe mais na tela, o canvas cresce, a vista rola e o
+fluxo continua no topo da área nova. Comandos de fluxo: `linha` (pula uma
+linha), `coluna` (`esquerda`/`direita`/`unica`, duas colunas por tela) e
+`nova_tela`. Elementos mais largos que a coluna ocupam a largura inteira. Se a
+aula escolheu a coluna, uma coluna cheia continua **na mesma coluna**, na tela
+seguinte — o motor não troca de coluna por conta própria.
+
+### Anticolisão rígida
+
+- `scene/Occupancy`: grade de 1 unidade por célula com a ocupação do canvas — a
+  "visão espacial" do motor. É refeita a partir dos elementos a cada colocação e
+  consultada por somas acumuladas, então testar uma caixa custa O(1).
+  Linhas, setas, conexões, destaques e traços do mouse **não** são obstáculos de
+  caixa, mas marcam a grade ao longo do próprio traço (`strokeThickness`), para
+  que nenhum texto caia em cima deles.
+- Ordem das tentativas, sem exceções: (1) deslocar na direção do posicionamento;
+  (2) espaço livre mais próximo na tela atual; (3) tela limpa adiante (o canvas
+  cresce); (4) só então reduzir a escala do elemento, com aviso. **Não existe
+  mais** o "aceita com aviso depois de 10 tentativas".
+- `em` é apenas uma sugestão: se colidir, é deslocado como qualquer outro.
+  `em_centro_de` pode sobrepor **só** o elemento que referencia (a letra dentro
+  do círculo); `relativo_a` idem (o arco com `distancia` 0 em volta da
+  referência). Contra qualquer outro elemento, ambos são deslocados.
+
+### As demais formas de posicionamento
+
+- Resolve as formas da seção 3 do protocolo, em unidades do canvas:
+  - `ancora`: 9 posições na área útil da tela atual.
   - `abaixo_de` / `acima_de` / `direita_de` / `esquerda_de`: encostado na caixa
     da referência a `margem` (padrão `relativeMargin`), com `alinhar`
     `inicio` | `centro` (padrão) | `fim` no outro eixo.
@@ -176,14 +234,7 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   - `em`: o ponto de referência do elemento vai para [x, y].
 - Ponto de referência: nas formas, a origem da geometria (centro do círculo, do
   arco, do retângulo; origem dos `pontos` relativos); no texto, o centro do texto.
-- Elemento fora da área útil é empurrado para dentro, com aviso no log.
-- Colisão com a caixa de outro elemento: desloca na direção do posicionamento
-  (abaixo → para baixo, relativo_a → na direção do ângulo, âncora → para dentro)
-  até não colidir, no máximo `maxCollisionAttempts` (10) vezes; depois aceita,
-  com aviso. `em` e `em_centro_de` não são deslocados (são pedidos explícitos), e
-  a referência do `relativo_a` pode ser tocada (ex.: arco com `distancia` 0).
-  Linhas, setas, conexões e destaques não contam como obstáculo (a caixa de um
-  traço diagonal cobre uma área que ele não ocupa).
+- Elemento fora da área útil da tela é empurrado para dentro.
 - Referência a id inexistente: usa a âncora `centro`, com aviso no log.
 - Modo de depuração (F12): a `BoardCanvas` desenha por cima da lousa, com
   QPainter e fora do `DepositBuffer`, a área útil (tracejada) e as bounding boxes

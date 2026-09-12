@@ -1,0 +1,61 @@
+{"tipo":"escrever","texto":"Teste de estresse do fluxo","tamanho":7}
+{"tipo":"fala","texto":"Sessenta comandos, nenhum posicionamento."}
+{"tipo":"escrever","texto":"Primeira parte","tamanho":5}
+{"tipo":"escrever","texto":"a + b = c"}
+{"tipo":"escrever","texto":"x^2 + y^2 = r^2"}
+{"tipo":"forma","forma":"circulo","raio":6}
+{"tipo":"escrever","texto":"circunferência"}
+{"tipo":"escrever","texto":"A = pi·r^2"}
+{"tipo":"forma","forma":"retangulo","largura":24,"altura":10}
+{"tipo":"escrever","texto":"retângulo"}
+{"tipo":"escrever","texto":"A = b · h"}
+{"tipo":"escrever","texto":"P = 2b + 2h"}
+{"tipo":"linha"}
+{"tipo":"escrever","texto":"Segunda parte","tamanho":5}
+{"tipo":"escrever","texto":"H_2O"}
+{"tipo":"escrever","texto":"CO_2"}
+{"tipo":"escrever","texto":"NaCl"}
+{"tipo":"forma","forma":"triangulo","pontos":[[0,-7],[8,7],[-8,7]]}
+{"tipo":"escrever","texto":"triângulo"}
+{"tipo":"escrever","texto":"soma dos ângulos = 180°"}
+{"tipo":"forma","forma":"elipse","raio_x":10,"raio_y":5}
+{"tipo":"escrever","texto":"elipse"}
+{"tipo":"escrever","texto":"e = c / a"}
+{"tipo":"nova_tela"}
+{"tipo":"escrever","texto":"Terceira parte","tamanho":6}
+{"tipo":"coluna","qual":"esquerda"}
+{"tipo":"escrever","texto":"Coluna A","tamanho":5}
+{"tipo":"escrever","texto":"log(a·b)"}
+{"tipo":"escrever","texto":"log(a/b)"}
+{"tipo":"escrever","texto":"log(a^n)"}
+{"tipo":"escrever","texto":"log_a(a) = 1"}
+{"tipo":"escrever","texto":"log_a(1) = 0"}
+{"tipo":"forma","forma":"circulo","raio":5}
+{"tipo":"coluna","qual":"direita"}
+{"tipo":"escrever","texto":"Coluna B","tamanho":5}
+{"tipo":"escrever","texto":"sen^2 + cos^2 = 1"}
+{"tipo":"escrever","texto":"tg = sen / cos"}
+{"tipo":"escrever","texto":"sen(30°) = 0,5"}
+{"tipo":"escrever","texto":"cos(60°) = 0,5"}
+{"tipo":"escrever","texto":"tg(45°) = 1"}
+{"tipo":"forma","forma":"retangulo","largura":18,"altura":8}
+{"tipo":"coluna","qual":"unica"}
+{"tipo":"escrever","texto":"Fecho da segunda tela"}
+{"tipo":"nova_tela"}
+{"tipo":"escrever","texto":"Quarta parte","tamanho":6}
+{"tipo":"objeto_3d","vista":"cavaleira","partes":[{"solido":"caixa","tamanho":[20,20,20]}]}
+{"tipo":"escrever","texto":"V = a^3"}
+{"tipo":"escrever","texto":"A = 6a^2"}
+{"tipo":"escrever","texto":"d = a·raiz(3)"}
+{"tipo":"forma","forma":"arco","raio":8,"angulo_inicio":0,"angulo_fim":180}
+{"tipo":"escrever","texto":"semicircunferência"}
+{"tipo":"escrever","texto":"Resumo","tamanho":5}
+{"tipo":"escrever","texto":"área, volume e ângulo"}
+{"tipo":"escrever","texto":"tudo em fluxo"}
+{"tipo":"escrever","texto":"nada se sobrepõe"}
+{"tipo":"escrever","texto":"a lousa rola"}
+{"tipo":"escrever","texto":"e cresce"}
+{"tipo":"escrever","texto":"quanto for preciso"}
+{"tipo":"forma","forma":"circulo","raio":4}
+{"tipo":"escrever","texto":"fim do teste"}
+{"tipo":"fala","texto":"Se algo se sobrepôs, o teste falha."}

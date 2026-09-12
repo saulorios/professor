@@ -55,15 +55,15 @@ struct Object3DInfo {
 class Object3DBuilder
 {
 public:
-    Object3DBuilder(const SceneParams &params, const Layout &layout, const TextLayout &text);
+    Object3DBuilder(const SceneParams &params, Layout &layout, const TextLayout &text);
 
     bool build(const QJsonObject &command, const std::vector<SceneElement> &elements,
                PressureLevel pressure, std::vector<ObjectStroke> *strokes, Object3DInfo *info,
-               QString *error) const;
+               QString *error);
 
 private:
     SceneParams m_params;
     Geometry2D m_geometry;
-    const Layout &m_layout;
+    Layout &m_layout;
     const TextLayout &m_text;
 };

@@ -11,6 +11,7 @@
 namespace {
 
 constexpr double kPi = 3.141592653589793;
+constexpr double kEpsilon = 1e-6;
 
 const QStringList kAnchors = {"topo_esquerda", "topo_centro", "topo_direita", "meio_esquerda", "centro",
                               "meio_direita", "base_esquerda", "base_centro", "base_direita"};
@@ -28,40 +29,84 @@ QString describe(const QJsonObject &command)
     return QString("%1 %2").arg(type, command.value("forma").toString()).trimmed();
 }
 
-// Menor avanço t >= 0 na direção `d` (unitária) que separa `box` de `obstacle`
-double separation(const QRectF &box, const QRectF &obstacle, const QPointF &d)
-{
-    constexpr double kEpsilon = 1e-9;
-    double t = std::numeric_limits<double>::infinity();
-    if (d.x() > kEpsilon)
-        t = std::min(t, (obstacle.right() - box.left()) / d.x());
-    else if (d.x() < -kEpsilon)
-        t = std::min(t, (box.right() - obstacle.left()) / -d.x());
-    if (d.y() > kEpsilon)
-        t = std::min(t, (obstacle.bottom() - box.top()) / d.y());
-    else if (d.y() < -kEpsilon)
-        t = std::min(t, (box.bottom() - obstacle.top()) / -d.y());
-    return std::isfinite(t) ? std::max(t, 0.0) : 0.0;
-}
-
-bool collides(const QRectF &box, const std::vector<SceneElement> &elements, const SceneElement *exclude)
-{
-    return std::any_of(elements.begin(), elements.end(), [&](const SceneElement &e) {
-        return e.obstacle && &e != exclude && e.bounds.intersects(box);
-    });
-}
-
 } // namespace
 
 Layout::Layout(const SceneParams &params)
     : m_params(params)
 {
+    reset();
 }
 
-QRectF Layout::usableArea() const
+QRectF Layout::screenArea(int screen) const
 {
     const double m = m_params.margin;
-    return QRectF(m, m, m_params.boardWidth - 2 * m, m_params.boardHeight - m_params.captionBandHeight - 2 * m);
+    const double top = screen * m_params.boardHeight + m;
+    return QRectF(m, top, m_params.boardWidth - 2 * m, m_params.boardHeight - 2 * m);
+}
+
+QRectF Layout::canvasArea() const
+{
+    return QRectF(0.0, 0.0, m_params.boardWidth, canvasHeight());
+}
+
+void Layout::reset()
+{
+    m_screens = 1;
+    m_screen = 0;
+    m_column = 0;
+    m_twoColumns = false;
+    m_grid.reset(m_params.boardWidth, m_params.boardHeight);
+    m_pen[0] = m_pen[1] = screenArea(0).top();
+}
+
+void Layout::newLine()
+{
+    m_pen[m_column] += m_params.flowLineHeight;
+}
+
+bool Layout::setColumn(const QString &which)
+{
+    if (which == "unica") {
+        // Volta para uma coluna só, abaixo do que já foi escrito nas duas
+        m_pen[0] = m_pen[1] = std::max(m_pen[0], m_pen[1]);
+        m_twoColumns = false;
+        m_columnChosen = false;
+        m_column = 0;
+        return true;
+    }
+    if (which != "esquerda" && which != "direita")
+        return false;
+    if (!m_twoColumns) {
+        // A partir daqui a tela tem duas colunas, começando na mesma altura
+        m_twoColumns = true;
+        m_pen[1] = m_pen[0] = std::max(m_pen[0], m_pen[1]);
+    }
+    m_column = which == "direita" ? 1 : 0;
+    m_columnChosen = true;
+    return true;
+}
+
+void Layout::newScreen()
+{
+    overflowScreen();
+    m_column = 0;
+    m_twoColumns = false;
+    m_columnChosen = false;
+}
+
+void Layout::overflowScreen()
+{
+    growTo(m_screen + 1);
+    m_screen += 1;
+    m_pen[0] = m_pen[1] = screenArea(m_screen).top();
+}
+
+void Layout::growTo(int screen)
+{
+    if (screen < m_screens)
+        return;
+    m_screens = screen + 1;
+    m_grid.ensureHeight(canvasHeight());
 }
 
 const SceneElement *Layout::find(const std::vector<SceneElement> &elements, const QString &id)
@@ -74,20 +119,106 @@ const SceneElement *Layout::find(const std::vector<SceneElement> &elements, cons
     return nullptr;
 }
 
-QPointF Layout::place(const QJsonObject &command, const QRectF &local, const QPointF &localAnchor,
-                      const std::vector<SceneElement> &elements) const
+QRectF Layout::columnRect(int screen, int column) const
+{
+    const QRectF area = screenArea(screen);
+    if (!m_twoColumns)
+        return area;
+    const double width = (area.width() - m_params.flowColumnGap) / 2.0;
+    return column == 0 ? QRectF(area.left(), area.top(), width, area.height())
+                       : QRectF(area.right() - width, area.top(), width, area.height());
+}
+
+int Layout::screenOf(const QRectF &box) const
+{
+    return std::max(0, int(std::floor(box.center().y() / m_params.boardHeight)));
+}
+
+void Layout::rebuildGrid(const std::vector<SceneElement> &elements, const SceneElement *allowed)
+{
+    m_grid.ensureHeight(canvasHeight());
+    m_grid.clear();
+    for (const SceneElement &element : elements) {
+        if (&element == allowed)
+            continue;
+        // Linhas e setas marcam só o próprio traço; o resto marca a caixa
+        if (!element.marks.empty()) {
+            for (const Polyline &line : element.marks)
+                m_grid.markPath(line, m_params.strokeThickness);
+        } else if (element.obstacle) {
+            m_grid.markBox(element.bounds);
+        }
+    }
+}
+
+QPointF Layout::flowOrigin(const QRectF &local, Role role)
+{
+    // Elementos largos (objetos 3D, eixos) ocupam a largura inteira
+    for (int attempt = 0; attempt < 3; ++attempt) {
+        const bool wide = local.width() > columnRect(m_screen, m_column).width() + kEpsilon;
+        const QRectF column = wide ? screenArea(m_screen) : columnRect(m_screen, m_column);
+        const double top = wide ? std::max(m_pen[0], m_pen[1]) : m_pen[m_column];
+
+        if (top + local.height() <= screenArea(m_screen).bottom() + kEpsilon || attempt == 2) {
+            const double x = role == Role::Title ? column.center().x() - local.width() / 2.0 : column.left();
+            return QPointF(x, top);
+        }
+        // Só troca de coluna sozinho quando a aula não escolheu uma; se escolheu,
+        // a lista continua na mesma coluna, na tela seguinte
+        if (m_twoColumns && !wide && m_column == 0 && !m_columnChosen)
+            m_column = 1;
+        else
+            overflowScreen();
+    }
+    return screenArea(m_screen).topLeft();
+}
+
+bool Layout::nearestFree(const QRectF &area, const QSizeF &size, const QPointF &wanted, QPointF *found) const
+{
+    if (size.width() > area.width() + kEpsilon || size.height() > area.height() + kEpsilon)
+        return false;
+    const double step = std::max(0.5, m_params.collisionStep);
+    double best = std::numeric_limits<double>::infinity();
+    for (double y = area.top(); y <= area.bottom() - size.height() + kEpsilon; y += step) {
+        for (double x = area.left(); x <= area.right() - size.width() + kEpsilon; x += step) {
+            const double distance = std::hypot(x - wanted.x(), y - wanted.y());
+            if (distance >= best)
+                continue;
+            if (!m_grid.isFree(QRectF(QPointF(x, y), size)))
+                continue;
+            best = distance;
+            *found = QPointF(x, y);
+        }
+    }
+    return std::isfinite(best);
+}
+
+void Layout::noteOccupied(const QRectF &box)
+{
+    const int screen = screenOf(box);
+    if (screen > m_screen) {
+        // O elemento foi parar numa tela adiante: o fluxo continua de lá
+        m_screen = screen;
+        m_column = 0;
+        m_twoColumns = false;
+        m_pen[0] = m_pen[1] = screenArea(screen).top();
+    }
+    const double bottom = box.bottom() + m_params.flowSpacing;
+    for (int column = 0; column < 2; ++column) {
+        const QRectF rect = columnRect(m_screen, column);
+        if (box.right() > rect.left() - kEpsilon && box.left() < rect.right() + kEpsilon)
+            m_pen[column] = std::max(m_pen[column], bottom);
+    }
+    m_grid.markBox(box);
+}
+
+Layout::Placement Layout::place(const QJsonObject &command, const QRectF &local, const QPointF &localAnchor,
+                                const std::vector<SceneElement> &elements, Role role)
 {
     const QString who = describe(command);
     QPointF offset;
-    QPointF direction(0.0, 1.0);          // para onde afastar em caso de colisão
-    bool avoidCollisions = true;
-    const SceneElement *exclude = nullptr; // referência que o elemento pode tocar de propósito
-
-    // Âncora "centro" quando a referência não existe
-    auto fallbackToCenter = [&](const QString &reason) {
-        qWarning().noquote() << QString("Layout: %1 — %2; usando \"centro\"").arg(who, reason);
-        offset = anchorOffset("centro", local, &direction);
-    };
+    QPointF direction(0.0, 1.0);           // para onde afastar em caso de colisão
+    const SceneElement *allowed = nullptr; // o único elemento que pode ser tocado
 
     QString side;
     for (const QString &key : kSides)
@@ -95,17 +226,28 @@ QPointF Layout::place(const QJsonObject &command, const QRectF &local, const QPo
             side = key;
             break;
         }
+    const bool positioned = command.contains("em") || command.contains("em_centro_de")
+                            || command.contains("relativo_a") || command.contains("ancora")
+                            || !side.isEmpty();
+
+    // Âncora "centro" quando a referência não existe
+    auto fallbackToCenter = [&](const QString &reason) {
+        qWarning().noquote() << QString("Layout: %1 — %2; usando \"centro\"").arg(who, reason);
+        offset = anchorOffset("centro", local, &direction);
+    };
 
     QPointF at;
-    if (json::readPoint(command.value("em"), &at)) {
-        // Posição absoluta pedida explicitamente: o ponto de referência vai para lá
+    if (!positioned) {
+        // O PADRÃO: fluxo tipo documento, o motor decide o "onde"
+        offset = flowOrigin(local, role) - local.topLeft();
+    } else if (json::readPoint(command.value("em"), &at)) {
+        // Coordenada absoluta: hoje é só sugestão (e legado do protocolo)
         offset = at - localAnchor;
-        avoidCollisions = false;
     } else if (command.contains("em_centro_de")) {
         const QString id = command.value("em_centro_de").toString();
         if (const SceneElement *ref = find(elements, id)) {
             offset = ref->bounds.center() - local.center();
-            avoidCollisions = false; // fica dentro do outro de propósito
+            allowed = ref; // pode ficar dentro do outro, mas só dele
         } else {
             fallbackToCenter(QString("em_centro_de \"%1\" não existe").arg(id));
         }
@@ -124,7 +266,7 @@ QPointF Layout::place(const QJsonObject &command, const QRectF &local, const QPo
             offset = ref->anchor + unit * distance - localAnchor;
             if (distance > 0.0)
                 direction = unit;
-            exclude = ref;
+            allowed = ref; // a geometria em volta da referência pode tocá-la
         } else {
             fallbackToCenter(QString("relativo_a \"%1\" não existe").arg(id));
         }
@@ -158,54 +300,81 @@ QPointF Layout::place(const QJsonObject &command, const QRectF &local, const QPo
         }
     } else {
         QString anchor = command.value("ancora").toString();
-        if (anchor.isEmpty()) {
-            qWarning().noquote() << QString("Layout: %1 — sem posicionamento; usando \"centro\"").arg(who);
-            anchor = "centro";
-        } else if (!kAnchors.contains(anchor)) {
+        if (!kAnchors.contains(anchor)) {
             qWarning().noquote() << QString("Layout: %1 — âncora \"%2\" desconhecida; usando \"centro\"").arg(who, anchor);
             anchor = "centro";
         }
         offset = anchorOffset(anchor, local, &direction);
     }
 
-    // Dentro da área útil e sem sobrepor outros elementos
-    const QRectF initial = local.translated(offset);
-    QRectF box = initial;
-    bool pushed = false;
-    auto keepInside = [&] {
-        const QRectF inside = pushInside(box);
-        if (inside != box) {
-            pushed = true;
-            box = inside;
-        }
-    };
-    keepInside();
+    // --- Anticolisão rígida: sobreposição nunca é aceitável ---
+    rebuildGrid(elements, allowed);
+    QRectF box = local.translated(offset);
+    int screen = screenOf(box);
+    growTo(screen);
+    box = pushInside(box, screenArea(screen));
 
-    if (avoidCollisions) {
-        for (int attempt = 0; attempt < m_params.maxCollisionAttempts; ++attempt) {
-            double needed = 0.0;
-            for (const SceneElement &e : elements)
-                if (e.obstacle && &e != exclude && e.bounds.intersects(box))
-                    needed = std::max(needed, separation(box, e.bounds, direction));
-            if (needed <= 0.0)
-                break;
-            box.translate(direction * (needed + m_params.collisionGap));
-            keepInside();
+    if (!m_grid.isFree(box)) {
+        const QPointF wanted = box.topLeft();
+        bool placed = false;
+
+        // (1) desliza na direção do posicionamento
+        const QRectF area = screenArea(screen);
+        const double step = std::max(0.5, m_params.collisionStep);
+        const double reach = std::hypot(area.width(), area.height());
+        for (double t = step; t <= reach && !placed; t += step) {
+            const QRectF candidate = pushInside(box.translated(direction * t), area);
+            if (m_grid.isFree(candidate)) {
+                box = candidate;
+                placed = true;
+            }
         }
-        if (collides(box, elements, exclude))
-            qWarning().noquote() << QString("Layout: %1 — ainda sobrepõe outro elemento após %2 tentativas; aceito")
-                                        .arg(who).arg(m_params.maxCollisionAttempts);
+
+        // (2) o espaço livre mais próximo na tela atual
+        QPointF found;
+        if (!placed && nearestFree(area, box.size(), wanted, &found)) {
+            box.moveTopLeft(found);
+            placed = true;
+        }
+
+        // (3) uma tela limpa adiante
+        for (int next = screen + 1; !placed && next <= screen + m_params.maxScreenGrowth; ++next) {
+            growTo(next);
+            rebuildGrid(elements, allowed);
+            const QRectF nextArea = screenArea(next);
+            if (nearestFree(nextArea, box.size(), nextArea.topLeft(), &found)) {
+                box.moveTopLeft(found);
+                screen = next;
+                placed = true;
+            }
+        }
+
+        // (4) só então, reduzir o elemento
+        if (!placed) {
+            const QRectF nextArea = screenArea(screen);
+            const double scale = std::max(m_params.minScale,
+                                          std::min(nextArea.width() / std::max(box.width(), kEpsilon),
+                                                   nextArea.height() / std::max(box.height(), kEpsilon)));
+            qWarning().noquote() << QString("Layout: %1 — não cabe em nenhuma tela; reduzido para %2%")
+                                        .arg(who, QString::number(scale * 100.0, 'f', 0));
+            const QRectF scaled(localAnchor + (local.topLeft() - localAnchor) * scale, local.size() * scale);
+            QRectF small = pushInside(scaled.translated(offset), nextArea);
+            if (nearestFree(nextArea, small.size(), small.topLeft(), &found))
+                small.moveTopLeft(found);
+            noteOccupied(small);
+            // O chamador escala em torno do ponto de referência e depois translada
+            return {small.topLeft() - scaled.topLeft(), scale};
+        }
     }
-    if (pushed)
-        qWarning().noquote() << QString("Layout: %1 — saía da área útil da lousa; empurrado para dentro").arg(who);
 
-    return offset + (box.topLeft() - initial.topLeft());
+    noteOccupied(box);
+    return {box.topLeft() - local.topLeft(), 1.0};
 }
 
 QPointF Layout::anchorOffset(const QString &anchor, const QRectF &local, QPointF *direction) const
 {
-    // Horizontal: esquerda / centro / direita; vertical: topo / meio / base (na área útil)
-    const QRectF area = usableArea();
+    // Horizontal: esquerda / centro / direita; vertical: topo / meio / base
+    const QRectF area = screenArea(m_screen);
     double x = area.center().x() - local.center().x();
     double y = area.center().y() - local.center().y();
     if (anchor.endsWith("_esquerda"))
@@ -222,9 +391,8 @@ QPointF Layout::anchorOffset(const QString &anchor, const QRectF &local, QPointF
     return QPointF(x, y);
 }
 
-QRectF Layout::pushInside(const QRectF &box) const
+QRectF Layout::pushInside(const QRectF &box, const QRectF &area) const
 {
-    const QRectF area = usableArea();
     double dx = 0.0, dy = 0.0;
     if (box.width() > area.width() || box.left() < area.left())
         dx = area.left() - box.left();

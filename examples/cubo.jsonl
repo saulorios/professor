@@ -1,10 +1,10 @@
-{"tipo":"escrever","id":"titulo","texto":"Volume do cubo","tamanho":6,"ancora":"topo_esquerda"}
-{"tipo":"objeto_3d","id":"cubo","vista":"cavaleira","ancora":"centro","arestas_ocultas":"tracejar","partes":[{"solido":"caixa","tamanho":[24,24,24]}]}
-{"tipo":"fala","texto":"Um cubo tem todas as arestas com a mesma medida."}
-{"tipo":"cotar","alvo":"cubo","aresta":"largura","texto":"a"}
-{"tipo":"cotar","alvo":"cubo","aresta":"altura","texto":"a"}
-{"tipo":"cotar","alvo":"cubo","aresta":"profundidade","texto":"a"}
-{"tipo":"pausa","segundos":1}
-{"tipo":"escrever","id":"formula","texto":"V = a · a · a = a^3","tamanho":5,"ancora":"meio_direita"}
-{"tipo":"destacar","alvo":"formula","modo":"caixa"}
-{"tipo":"fala","texto":"Multiplicando as três dimensões, chegamos a a ao cubo."}
+{"tipo": "escrever", "id": "titulo", "texto": "Volume do cubo", "tamanho": 6}
+{"tipo": "objeto_3d", "id": "cubo", "vista": "cavaleira", "arestas_ocultas": "tracejar", "partes": [{"solido": "caixa", "tamanho": [24, 24, 24]}]}
+{"tipo": "fala", "texto": "Um cubo tem todas as arestas com a mesma medida."}
+{"tipo": "cotar", "alvo": "cubo", "aresta": "largura", "texto": "a"}
+{"tipo": "cotar", "alvo": "cubo", "aresta": "altura", "texto": "a"}
+{"tipo": "cotar", "alvo": "cubo", "aresta": "profundidade", "texto": "a"}
+{"tipo": "pausa", "segundos": 1}
+{"tipo": "escrever", "id": "formula", "texto": "V = a · a · a = a^3", "tamanho": 5}
+{"tipo": "destacar", "alvo": "formula", "modo": "caixa"}
+{"tipo": "fala", "texto": "Multiplicando as três dimensões, chegamos a a ao cubo."}

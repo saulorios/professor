@@ -1,0 +1,25 @@
+{"tipo":"escrever","id":"titulo","texto":"Logaritmo","tamanho":8}
+{"tipo":"fala","texto":"Logaritmo é a pergunta: qual expoente leva a base até o número?"}
+{"tipo":"escrever","texto":"log_a(b) = x  <=>  a^x = b","tamanho":5}
+{"tipo":"escrever","texto":"a > 0, a diferente de 1, b > 0","tamanho":3}
+{"tipo":"fala","texto":"A base tem que ser positiva e diferente de 1."}
+{"tipo":"linha"}
+{"tipo":"escrever","texto":"Exemplo","tamanho":5}
+{"tipo":"escrever","texto":"log_2(8) = 3"}
+{"tipo":"escrever","texto":"porque 2^3 = 8"}
+{"tipo":"fala","texto":"Dois elevado a três é oito, então o logaritmo de oito na base dois é três."}
+{"tipo":"pausa","segundos":1}
+{"tipo":"escrever","texto":"Propriedades","tamanho":5}
+{"tipo":"coluna","qual":"esquerda"}
+{"tipo":"escrever","texto":"log(a·b) = log a + log b"}
+{"tipo":"escrever","texto":"log(a/b) = log a - log b"}
+{"tipo":"coluna","qual":"direita"}
+{"tipo":"escrever","texto":"log(a^n) = n · log a"}
+{"tipo":"escrever","texto":"log_a(a) = 1"}
+{"tipo":"fala","texto":"Produto vira soma, divisão vira subtração e expoente desce multiplicando."}
+{"tipo":"nova_tela"}
+{"tipo":"escrever","texto":"Para que serve","tamanho":6}
+{"tipo":"escrever","texto":"pH = -log[H^+]"}
+{"tipo":"escrever","texto":"[H^+] = 10^{-3}  =>  pH = 3"}
+{"tipo":"fala","texto":"O pH é um logaritmo: cada unidade é dez vezes mais ácido."}
+{"tipo":"fim_passo"}

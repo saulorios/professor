@@ -1,43 +1,67 @@
-{"tipo":"escrever","id":"t1","texto":"Sólidos em cavaleira","tamanho":5,"ancora":"topo_centro"}
-{"tipo":"fala","texto":"Na projeção cavaleira a frente do sólido fica sem deformação."}
-{"tipo":"objeto_3d","id":"caixa","vista":"cavaleira","em":[30,28],"partes":[{"solido":"caixa","tamanho":[16,16,16]}]}
-{"tipo":"escrever","texto":"caixa","tamanho":3,"abaixo_de":"caixa"}
-{"tipo":"objeto_3d","id":"prisma","vista":"cavaleira","em":[80,28],"partes":[{"solido":"prisma_triangular","tamanho":[18,14,14]}]}
-{"tipo":"escrever","texto":"prisma","tamanho":3,"abaixo_de":"prisma"}
-{"tipo":"objeto_3d","id":"piramide","vista":"cavaleira","em":[130,28],"partes":[{"solido":"piramide","base":[18,14],"altura":16,"lados":4}]}
-{"tipo":"escrever","texto":"pirâmide","tamanho":3,"abaixo_de":"piramide"}
-{"tipo":"objeto_3d","id":"cilindro","vista":"cavaleira","em":[30,62],"partes":[{"solido":"cilindro","raio":8,"altura":16}]}
-{"tipo":"escrever","texto":"cilindro","tamanho":3,"abaixo_de":"cilindro"}
-{"tipo":"objeto_3d","id":"cone","vista":"cavaleira","em":[80,62],"partes":[{"solido":"cone","raio":8,"altura":16}]}
-{"tipo":"escrever","texto":"cone","tamanho":3,"abaixo_de":"cone"}
-{"tipo":"objeto_3d","id":"esfera","vista":"cavaleira","em":[130,62],"partes":[{"solido":"esfera","raio":8}]}
-{"tipo":"escrever","texto":"esfera","tamanho":3,"abaixo_de":"esfera"}
-{"tipo":"rotular","alvo":"caixa","vertice":"frente_topo_direita","texto":"A"}
-{"tipo":"pausa","segundos":1}
-{"tipo":"limpar"}
-{"tipo":"escrever","id":"t2","texto":"Sólidos em isométrica","tamanho":5,"ancora":"topo_centro"}
-{"tipo":"objeto_3d","id":"caixa","vista":"isometrica","em":[30,28],"partes":[{"solido":"caixa","tamanho":[16,16,16]}]}
-{"tipo":"objeto_3d","id":"prisma","vista":"isometrica","em":[80,28],"partes":[{"solido":"prisma_triangular","tamanho":[18,14,14]}]}
-{"tipo":"objeto_3d","id":"piramide","vista":"isometrica","em":[130,28],"partes":[{"solido":"piramide","base":[18,14],"altura":16,"lados":4}]}
-{"tipo":"objeto_3d","id":"cilindro","vista":"isometrica","em":[30,62],"partes":[{"solido":"cilindro","raio":8,"altura":16}]}
-{"tipo":"objeto_3d","id":"cone","vista":"isometrica","em":[80,62],"partes":[{"solido":"cone","raio":8,"altura":16}]}
-{"tipo":"objeto_3d","id":"esfera","vista":"isometrica","em":[130,62],"partes":[{"solido":"esfera","raio":8}]}
-{"tipo":"pausa","segundos":1}
-{"tipo":"limpar"}
-{"tipo":"escrever","id":"t3","texto":"Sólidos em perspectiva de 1 ponto","tamanho":5,"ancora":"topo_centro"}
-{"tipo":"objeto_3d","id":"caixa","vista":"perspectiva_1","em":[30,28],"partes":[{"solido":"caixa","tamanho":[16,16,16]}]}
-{"tipo":"objeto_3d","id":"prisma","vista":"perspectiva_1","em":[80,28],"partes":[{"solido":"prisma_triangular","tamanho":[18,14,14]}]}
-{"tipo":"objeto_3d","id":"piramide","vista":"perspectiva_1","em":[130,28],"partes":[{"solido":"piramide","base":[18,14],"altura":16,"lados":4}]}
-{"tipo":"objeto_3d","id":"cilindro","vista":"perspectiva_1","em":[30,62],"partes":[{"solido":"cilindro","raio":8,"altura":16}]}
-{"tipo":"objeto_3d","id":"cone","vista":"perspectiva_1","em":[80,62],"partes":[{"solido":"cone","raio":8,"altura":16}]}
-{"tipo":"objeto_3d","id":"esfera","vista":"perspectiva_1","em":[130,62],"partes":[{"solido":"esfera","raio":8}]}
-{"tipo":"pausa","segundos":1}
-{"tipo":"limpar"}
-{"tipo":"escrever","id":"t4","texto":"Sólidos em perspectiva de 2 pontos","tamanho":5,"ancora":"topo_centro"}
-{"tipo":"objeto_3d","id":"caixa","vista":"perspectiva_2","rotacao":30,"em":[30,28],"partes":[{"solido":"caixa","tamanho":[16,16,16]}]}
-{"tipo":"objeto_3d","id":"prisma","vista":"perspectiva_2","rotacao":30,"em":[80,28],"partes":[{"solido":"prisma_triangular","tamanho":[18,14,14]}]}
-{"tipo":"objeto_3d","id":"piramide","vista":"perspectiva_2","rotacao":30,"em":[130,28],"partes":[{"solido":"piramide","base":[18,14],"altura":16,"lados":4}]}
-{"tipo":"objeto_3d","id":"cilindro","vista":"perspectiva_2","rotacao":30,"em":[30,62],"partes":[{"solido":"cilindro","raio":8,"altura":16}]}
-{"tipo":"objeto_3d","id":"cone","vista":"perspectiva_2","rotacao":30,"em":[80,62],"partes":[{"solido":"cone","raio":8,"altura":16}]}
-{"tipo":"objeto_3d","id":"esfera","vista":"perspectiva_2","rotacao":30,"em":[130,62],"partes":[{"solido":"esfera","raio":8}]}
-{"tipo":"fala","texto":"A esfera é a mesma de qualquer ângulo: contorno e equador."}
+{"tipo": "escrever", "id": "t1", "texto": "Sólidos em cavaleira", "tamanho": 5}
+{"tipo": "fala", "texto": "Na projeção cavaleira a frente do sólido fica sem deformação."}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "caixa", "vista": "cavaleira", "partes": [{"solido": "caixa", "tamanho": [16, 16, 16]}]}
+{"tipo": "escrever", "texto": "caixa", "tamanho": 3, "abaixo_de": "caixa"}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "prisma", "vista": "cavaleira", "partes": [{"solido": "prisma_triangular", "tamanho": [18, 14, 14]}]}
+{"tipo": "escrever", "texto": "prisma", "tamanho": 3, "abaixo_de": "prisma"}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "piramide", "vista": "cavaleira", "partes": [{"solido": "piramide", "base": [18, 14], "altura": 16, "lados": 4}]}
+{"tipo": "escrever", "texto": "pirâmide", "tamanho": 3, "abaixo_de": "piramide"}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "cilindro", "vista": "cavaleira", "partes": [{"solido": "cilindro", "raio": 8, "altura": 16}]}
+{"tipo": "escrever", "texto": "cilindro", "tamanho": 3, "abaixo_de": "cilindro"}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "cone", "vista": "cavaleira", "partes": [{"solido": "cone", "raio": 8, "altura": 16}]}
+{"tipo": "escrever", "texto": "cone", "tamanho": 3, "abaixo_de": "cone"}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "esfera", "vista": "cavaleira", "partes": [{"solido": "esfera", "raio": 8}]}
+{"tipo": "escrever", "texto": "esfera", "tamanho": 3, "abaixo_de": "esfera"}
+{"tipo": "rotular", "alvo": "caixa", "vertice": "frente_topo_direita", "texto": "A"}
+{"tipo": "pausa", "segundos": 1}
+{"tipo": "limpar"}
+{"tipo": "escrever", "id": "t2", "texto": "Sólidos em isométrica", "tamanho": 5}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "caixa", "vista": "isometrica", "partes": [{"solido": "caixa", "tamanho": [16, 16, 16]}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "prisma", "vista": "isometrica", "partes": [{"solido": "prisma_triangular", "tamanho": [18, 14, 14]}]}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "piramide", "vista": "isometrica", "partes": [{"solido": "piramide", "base": [18, 14], "altura": 16, "lados": 4}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "cilindro", "vista": "isometrica", "partes": [{"solido": "cilindro", "raio": 8, "altura": 16}]}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "cone", "vista": "isometrica", "partes": [{"solido": "cone", "raio": 8, "altura": 16}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "esfera", "vista": "isometrica", "partes": [{"solido": "esfera", "raio": 8}]}
+{"tipo": "pausa", "segundos": 1}
+{"tipo": "limpar"}
+{"tipo": "escrever", "id": "t3", "texto": "Sólidos em perspectiva de 1 ponto", "tamanho": 5}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "caixa", "vista": "perspectiva_1", "partes": [{"solido": "caixa", "tamanho": [16, 16, 16]}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "prisma", "vista": "perspectiva_1", "partes": [{"solido": "prisma_triangular", "tamanho": [18, 14, 14]}]}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "piramide", "vista": "perspectiva_1", "partes": [{"solido": "piramide", "base": [18, 14], "altura": 16, "lados": 4}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "cilindro", "vista": "perspectiva_1", "partes": [{"solido": "cilindro", "raio": 8, "altura": 16}]}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "cone", "vista": "perspectiva_1", "partes": [{"solido": "cone", "raio": 8, "altura": 16}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "esfera", "vista": "perspectiva_1", "partes": [{"solido": "esfera", "raio": 8}]}
+{"tipo": "pausa", "segundos": 1}
+{"tipo": "limpar"}
+{"tipo": "escrever", "id": "t4", "texto": "Sólidos em perspectiva de 2 pontos", "tamanho": 5}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "caixa", "vista": "perspectiva_2", "rotacao": 30, "partes": [{"solido": "caixa", "tamanho": [16, 16, 16]}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "prisma", "vista": "perspectiva_2", "rotacao": 30, "partes": [{"solido": "prisma_triangular", "tamanho": [18, 14, 14]}]}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "piramide", "vista": "perspectiva_2", "rotacao": 30, "partes": [{"solido": "piramide", "base": [18, 14], "altura": 16, "lados": 4}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "cilindro", "vista": "perspectiva_2", "rotacao": 30, "partes": [{"solido": "cilindro", "raio": 8, "altura": 16}]}
+{"tipo": "coluna", "qual": "esquerda"}
+{"tipo": "objeto_3d", "id": "cone", "vista": "perspectiva_2", "rotacao": 30, "partes": [{"solido": "cone", "raio": 8, "altura": 16}]}
+{"tipo": "coluna", "qual": "direita"}
+{"tipo": "objeto_3d", "id": "esfera", "vista": "perspectiva_2", "rotacao": 30, "partes": [{"solido": "esfera", "raio": 8}]}
+{"tipo": "fala", "texto": "A esfera é a mesma de qualquer ângulo: contorno e equador."}

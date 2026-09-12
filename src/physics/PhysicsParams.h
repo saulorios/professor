@@ -6,8 +6,10 @@
 // Distâncias em pixels da lousa, tempos em milissegundos, velocidades em px/ms.
 struct PhysicsParams {
     // --- Lousa ---
+    // O canvas tem largura fixa e cresce para baixo em blocos de uma tela.
+    // boardHeight é a altura da TELA (viewport), não a do canvas.
     int boardWidth = 1920;               // 160 unidades × 12 px
-    int boardHeight = 1080;              // 90 unidades × 12 px
+    int boardHeight = 1080;              // 90 unidades × 12 px (uma tela)
 
     // --- Superfície (height map) ---
     std::uint32_t surfaceSeed = 1337;

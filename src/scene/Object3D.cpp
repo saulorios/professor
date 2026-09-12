@@ -174,7 +174,7 @@ Polyline convexHull(std::vector<QPointF> points)
 
 } // namespace
 
-Object3DBuilder::Object3DBuilder(const SceneParams &params, const Layout &layout, const TextLayout &text)
+Object3DBuilder::Object3DBuilder(const SceneParams &params, Layout &layout, const TextLayout &text)
     : m_params(params)
     , m_geometry(params)
     , m_layout(layout)
@@ -184,7 +184,7 @@ Object3DBuilder::Object3DBuilder(const SceneParams &params, const Layout &layout
 
 bool Object3DBuilder::build(const QJsonObject &command, const std::vector<SceneElement> &elements,
                             PressureLevel pressure, std::vector<ObjectStroke> *strokes,
-                            Object3DInfo *info, QString *error) const
+                            Object3DInfo *info, QString *error)
 {
     // --- Vista ---
     const QString viewName = command.value("vista").toString("cavaleira");
@@ -589,8 +589,12 @@ bool Object3DBuilder::build(const QJsonObject &command, const std::vector<SceneE
         scale *= fit;
     }
 
-    const QRectF local(raw.topLeft() * scale, raw.size() * scale);
-    const QPointF offset = m_layout.place(command, local, local.center(), elements);
+    QRectF local(raw.topLeft() * scale, raw.size() * scale);
+    const Layout::Placement placement = m_layout.place(command, local, local.center(), elements);
+    // O layout pode ter reduzido mais um pouco, se não coubesse em tela nenhuma
+    scale *= placement.scale;
+    local = QRectF(raw.topLeft() * scale, raw.size() * scale);
+    const QPointF offset = placement.offset;
     const auto map = [scale, offset](const QPointF &p) { return p * scale + offset; };
 
     // --- Traços, na ordem de desenho ---

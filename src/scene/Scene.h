@@ -34,7 +34,8 @@ public:
     explicit Scene(VirtualHand &hand, const SceneParams &params = SceneParams(), QObject *parent = nullptr);
 
     // Executa "forma", "escrever", "conectar", "destacar", "objeto_3d",
-    // "rotular", "cotar", "apagar" ou "limpar"
+    // "rotular", "cotar", "traco_livre", "linha", "coluna", "nova_tela",
+    // "apagar" ou "limpar"
     void execute(const QJsonObject &command);
 
     // Esquece todos os elementos e interrompe o desenho em andamento
@@ -47,6 +48,7 @@ public:
     const HumanizerParams &humanizerParams() const { return m_humanizer.params(); }
     const std::vector<SceneElement> &elements() const { return m_elements; }
     QRectF usableArea() const { return m_layout.usableArea(); }
+    double canvasHeight() const { return m_layout.canvasHeight(); }
     bool contains(const QString &id) const { return Layout::find(m_elements, id) != nullptr; }
     QRectF bounds(const QString &id) const;
     SceneDebugGeometry debugGeometry() const;
@@ -54,6 +56,10 @@ public:
 signals:
     void finished();
     void elementsChanged();
+    // O canvas precisa ter esta altura (unidades): a lousa cresce para baixo
+    void canvasHeightChanged(double units);
+    // O motor quer que esta faixa do canvas (unidades) esteja à vista
+    void ensureVisible(const QRectF &area);
 
 private:
     void drawShape(const QJsonObject &command);
@@ -64,8 +70,12 @@ private:
     void drawObject(const QJsonObject &command);
     void labelVertex(const QJsonObject &command);
     void dimensionEdge(const QJsonObject &command);
+    void flowCommand(const QJsonObject &command);
     void eraseElement(const QJsonObject &command);
     void clearAll();
+
+    // Depois de colocar um elemento: cresce o canvas e leva a vista até ele
+    void reveal(const QRectF &bounds);
 
     // Texto já humanizado, com a linha de base em y = 0 e começando em x = 0
     std::vector<HandStroke> writing(const QString &text, double size, bool cursive,

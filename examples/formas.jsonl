@@ -1,28 +1,31 @@
 {"tipo":"fala","texto":"Vamos praticar as formas básicas da lousa."}
-{"tipo":"forma","id":"c1","forma":"circulo","raio":7,"em":[22,20]}
-{"tipo":"forma","id":"e1","forma":"elipse","raio_x":11,"raio_y":6,"em":[55,20]}
-{"tipo":"forma","id":"r1","forma":"retangulo","largura":20,"altura":12,"em":[90,20]}
-{"tipo":"forma","id":"t1","forma":"triangulo","pontos":[[0,-7],[8,6],[-8,6]],"em":[125,20],"pressao":"forte"}
+{"tipo":"escrever","texto":"Formas","tamanho":7}
+{"tipo":"coluna","qual":"esquerda"}
+{"tipo":"forma","id":"c1","forma":"circulo","raio":7}
+{"tipo":"forma","id":"r1","forma":"retangulo","largura":20,"altura":12}
+{"tipo":"coluna","qual":"direita"}
+{"tipo":"forma","id":"e1","forma":"elipse","raio_x":11,"raio_y":6}
+{"tipo":"forma","id":"t1","forma":"triangulo","pontos":[[0,-7],[8,6],[-8,6]],"pressao":"forte"}
+{"tipo":"coluna","qual":"unica"}
 {"tipo":"fala","texto":"Conectar liga as bordas dos elementos, com ou sem seta."}
 {"tipo":"conectar","de":"c1","ate":"e1"}
-{"tipo":"conectar","de":"e1","ate":"r1","seta":true}
+{"tipo":"conectar","de":"c1","ate":"r1","seta":true}
 {"tipo":"conectar","de":"r1","ate":"t1","estilo":"tracejado","seta":true}
 {"tipo":"pausa","segundos":1}
+{"tipo":"nova_tela"}
 {"tipo":"fala","texto":"Linhas podem ser sólidas, tracejadas ou pontilhadas."}
-{"tipo":"forma","id":"l1","forma":"linha","de":[10,40],"ate":[50,40]}
-{"tipo":"forma","id":"l2","forma":"linha","de":[10,47],"ate":[50,47],"estilo":"tracejado"}
-{"tipo":"forma","id":"l3","forma":"linha","de":[10,54],"ate":[50,54],"estilo":"pontilhado","pressao":"leve"}
-{"tipo":"forma","id":"s1","forma":"seta","de":[58,56],"ate":[82,40]}
-{"tipo":"forma","id":"p1","forma":"poligono","pontos":[[0,-8],[7.6,-2.5],[4.7,6.5],[-4.7,6.5],[-7.6,-2.5]],"em":[102,48]}
-{"tipo":"forma","id":"a1","forma":"arco","raio":8,"angulo_inicio":200,"angulo_fim":340,"em":[130,30],"estilo":"tracejado"}
-{"tipo":"forma","id":"alvo","forma":"circulo","raio":4,"ancora":"meio_direita","estilo":"pontilhado"}
+{"tipo":"escrever","texto":"Linhas e estilos","tamanho":6}
+{"tipo":"forma","id":"l1","forma":"linha","de":[10,110],"ate":[50,110]}
+{"tipo":"forma","id":"l2","forma":"linha","de":[10,117],"ate":[50,117],"estilo":"tracejado"}
+{"tipo":"forma","id":"l3","forma":"linha","de":[10,124],"ate":[50,124],"estilo":"pontilhado","pressao":"leve"}
+{"tipo":"forma","id":"p1","forma":"poligono","pontos":[[0,-8],[7.6,-2.5],[4.7,6.5],[-4.7,6.5],[-7.6,-2.5]]}
+{"tipo":"forma","id":"a1","forma":"arco","raio":8,"angulo_inicio":200,"angulo_fim":340,"estilo":"tracejado"}
+{"tipo":"forma","id":"alvo","forma":"circulo","raio":4,"estilo":"pontilhado"}
 {"tipo":"forma","forma":"seta","de":"p1","ate":"alvo"}
-{"tipo":"forma","forma":"retangulo","largura":14,"altura":8,"ancora":"base_esquerda","pressao":"leve"}
-{"tipo":"forma","forma":"circulo","raio":3,"ancora":"topo_direita","pressao":"forte"}
 {"tipo":"pausa","segundos":1.5}
 {"tipo":"fala","texto":"O apagador passa sobre o elemento e deixa um leve fantasma de giz."}
-{"tipo":"apagar","id":"e1"}
 {"tipo":"apagar","id":"l2"}
+{"tipo":"apagar","id":"a1"}
 {"tipo":"pausa","segundos":1.5}
 {"tipo":"fala","texto":"E limpar apaga a lousa inteira."}
 {"tipo":"pausa","segundos":1}

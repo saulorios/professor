@@ -69,6 +69,8 @@ add_library(scene STATIC
     src/scene/JsonHelpers.h
     src/scene/Layout.h
     src/scene/Layout.cpp
+    src/scene/Occupancy.h
+    src/scene/Occupancy.cpp
     src/scene/TextLayout.h
     src/scene/TextLayout.cpp
     src/scene/solids/Mesh.h

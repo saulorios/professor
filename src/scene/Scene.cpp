@@ -51,6 +51,22 @@ double length(const QPointF &p)
     return std::hypot(p.x(), p.y());
 }
 
+// Escala a geometria em torno do ponto de referência (só quando o elemento não
+// coube em tela nenhuma e o layout mandou reduzir)
+void scaleAbout(std::vector<Polyline> &lines, const QPointF &pivot, double scale)
+{
+    for (Polyline &pl : lines)
+        for (QPointF &p : pl)
+            p = pivot + (p - pivot) * scale;
+}
+
+void scaleAbout(std::vector<HandStroke> &strokes, const QPointF &pivot, double scale)
+{
+    for (HandStroke &stroke : strokes)
+        for (QPointF &p : stroke.points)
+            p = pivot + (p - pivot) * scale;
+}
+
 // Centro médio de uma polilinha (usado para achar o "lado de fora" do objeto)
 QPointF centroid(const Polyline &points)
 {
@@ -135,6 +151,8 @@ void Scene::execute(const QJsonObject &command)
         labelVertex(command);
     else if (type == "cotar")
         dimensionEdge(command);
+    else if (type == "linha" || type == "coluna" || type == "nova_tela")
+        flowCommand(command);
     else if (type == "apagar")
         eraseElement(command);
     else if (type == "limpar")
@@ -150,7 +168,34 @@ void Scene::reset()
     m_hand.cancel();
     m_elements.clear();
     m_objects.clear();
+    m_layout.reset();
+    emit canvasHeightChanged(m_layout.canvasHeight());
+    emit ensureVisible(m_layout.screenArea(0));
     emit elementsChanged();
+}
+
+void Scene::flowCommand(const QJsonObject &command)
+{
+    const QString type = command.value("tipo").toString();
+    if (type == "linha") {
+        m_layout.newLine();
+    } else if (type == "nova_tela") {
+        m_layout.newScreen();
+        emit canvasHeightChanged(m_layout.canvasHeight());
+        emit ensureVisible(m_layout.usableArea());
+    } else {
+        const QString which = command.value("qual").toString("esquerda");
+        if (!m_layout.setColumn(which))
+            return fail(QString("coluna: \"%1\" desconhecida (esquerda, direita ou unica)").arg(which));
+    }
+    finishLater();
+}
+
+void Scene::reveal(const QRectF &bounds)
+{
+    // A lousa cresce para baixo conforme a aula precisa; a vista acompanha
+    emit canvasHeightChanged(m_layout.canvasHeight());
+    emit ensureVisible(bounds);
 }
 
 SceneDebugGeometry Scene::debugGeometry() const
@@ -244,17 +289,23 @@ void Scene::drawShape(const QJsonObject &command)
         } else {
             return fail(QString("forma '%1' não suportada nesta etapa").arg(shape));
         }
-        const QPointF offset = m_layout.place(command, Geometry2D::bounds(lines), QPointF(0, 0), m_elements);
-        translate(lines, offset);
-        element.anchor = offset;
+        const Layout::Placement placement =
+            m_layout.place(command, Geometry2D::bounds(lines), QPointF(0, 0), m_elements);
+        if (placement.scale != 1.0)
+            scaleAbout(lines, QPointF(0, 0), placement.scale);
+        translate(lines, placement.offset);
+        element.anchor = placement.offset;
     }
 
     std::vector<Polyline> all = lines;
     all.insert(all.end(), solid.begin(), solid.end());
     element.bounds = Geometry2D::bounds(all);
-    if (shape == "linha" || shape == "seta")
+    if (shape == "linha" || shape == "seta") {
         element.anchor = element.bounds.center();
+        element.marks = all; // o traço em si ocupa a grade, não a caixa inteira
+    }
     store(command, element, shape);
+    reveal(element.bounds);
     submit(command, lines, solid);
 }
 
@@ -293,13 +344,18 @@ void Scene::writeText(const QJsonObject &command)
     // O ponto de referência do texto é o seu centro; a ordem dos traços
     // (letra por letra) é preservada até a mão
     const QRectF local = Geometry2D::bounds(polylinesOf(strokes));
-    const QPointF offset = m_layout.place(command, local, local.center(), m_elements);
-    translate(strokes, offset);
+    // No fluxo, um texto grande é título e sai centralizado
+    const Layout::Role role = size >= m_params.flowTitleSize ? Layout::Role::Title : Layout::Role::Body;
+    const Layout::Placement placement = m_layout.place(command, local, local.center(), m_elements, role);
+    if (placement.scale != 1.0)
+        scaleAbout(strokes, local.center(), placement.scale);
+    translate(strokes, placement.offset);
 
     SceneElement element;
     element.bounds = Geometry2D::bounds(polylinesOf(strokes));
-    element.anchor = local.center() + offset;
+    element.anchor = element.bounds.center();
     store(command, element, QString("\"%1\"").arg(text));
+    reveal(element.bounds);
     m_waitingHand = true;
     m_hand.draw(strokes, Motion::Writing);
 }
@@ -335,6 +391,7 @@ void Scene::connectElements(const QJsonObject &command)
     element.bounds = Geometry2D::bounds(all);
     element.anchor = element.bounds.center();
     element.obstacle = false;
+    element.marks = all; // marca só o traço: nada de texto por cima da conexão
     store(command, element, "conectar");
     submit(command, lines, solid);
 }
@@ -367,6 +424,7 @@ void Scene::highlight(const QJsonObject &command)
     element.bounds = Geometry2D::bounds(lines);
     element.anchor = element.bounds.center();
     element.obstacle = false;
+    element.marks = lines; // o sublinhado/círculo ocupa o próprio traço
     store(command, element, mode);
     submit(command, lines);
 }
@@ -404,7 +462,9 @@ void Scene::drawFreeStroke(const QJsonObject &command)
     element.bounds = Geometry2D::bounds({line});
     element.anchor = element.bounds.center();
     element.obstacle = false; // um rabisco não ocupa a sua bounding box inteira
+    element.marks = {line};   // mas o traço em si entra na grade de ocupação
     store(command, element, "traço livre");
+    reveal(element.bounds);
     m_waitingHand = true;
     m_hand.drawRecorded(recorded);
 }
@@ -426,6 +486,7 @@ void Scene::drawObject(const QJsonObject &command)
     element.bounds = info.bounds;
     element.anchor = info.bounds.center();
     store(command, element, "objeto_3d");
+    reveal(element.bounds);
 
     // Cada traço leva a sua pressão (as arestas ocultas são leves)
     std::vector<Polyline> lines;
@@ -479,13 +540,16 @@ void Scene::labelVertex(const QJsonObject &command)
 
     QJsonObject placed = command;
     placed["em"] = QJsonArray{at.x(), at.y()};
-    const QPointF offset = m_layout.place(placed, local, local.center(), m_elements);
-    translate(strokes, offset);
+    const Layout::Placement placement = m_layout.place(placed, local, local.center(), m_elements);
+    if (placement.scale != 1.0)
+        scaleAbout(strokes, local.center(), placement.scale);
+    translate(strokes, placement.offset);
 
     SceneElement element;
     element.bounds = Geometry2D::bounds(polylinesOf(strokes));
     element.anchor = element.bounds.center();
     store(command, element, QString("rótulo \"%1\"").arg(text));
+    reveal(element.bounds);
     m_waitingHand = true;
     m_hand.draw(strokes, Motion::Writing);
 }
@@ -565,6 +629,7 @@ void Scene::dimensionEdge(const QJsonObject &command)
     element.bounds = Geometry2D::bounds(polylinesOf(strokes));
     element.anchor = element.bounds.center();
     store(command, element, QString("cota \"%1\"").arg(text));
+    reveal(element.bounds);
     m_waitingHand = true;
     m_hand.draw(strokes);
 }
@@ -604,6 +669,9 @@ void Scene::clearAll()
 {
     m_elements.clear();
     m_objects.clear();
+    m_layout.reset();
+    emit canvasHeightChanged(m_layout.canvasHeight());
+    emit ensureVisible(m_layout.screenArea(0));
     emit elementsChanged();
     m_waitingHand = true;
     m_hand.clearBoard();

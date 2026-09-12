@@ -250,6 +250,59 @@ LessonEditor QPushButton#AskButton:hover {
     color: #F48771;
 }
 
+/* Barra de rolagem da lousa: fina e discreta, encostada na direita */
+#BoardScroll {
+    background: transparent;
+    width: 8px;
+    margin: 0;
+}
+
+#BoardScroll::handle:vertical {
+    background: rgba(204, 204, 204, 55);
+    border-radius: 3px;
+    min-height: 40px;
+    margin: 2px;
+}
+
+#BoardScroll::handle:vertical:hover {
+    background: rgba(204, 204, 204, 110);
+}
+
+#BoardScroll::add-line:vertical,
+#BoardScroll::sub-line:vertical {
+    height: 0;
+}
+
+#BoardScroll::add-page:vertical,
+#BoardScroll::sub-page:vertical {
+    background: none;
+}
+
+/* Em que parte da lousa estamos ("2/3") */
+#PositionBadge {
+    background-color: rgba(0, 0, 0, 120);
+    border-radius: 4px;
+    padding: 2px 7px;
+    color: #9D9D9D;
+    font-size: 11px;
+}
+
+/* Aviso clicável: a escrita continua fora da vista */
+#BelowNotice {
+    background-color: rgba(0, 0, 0, 160);
+    border: 1px solid #2B2B2B;
+    border-radius: 12px;
+    padding: 4px 12px;
+    color: #CCCCCC;
+    font-size: 12px;
+}
+
+#BelowNotice:hover {
+    background-color: #04395E;
+    border-color: #0078D4;
+    color: #FFFFFF;
+}
+
 /* Indicador de gravação, no canto da lousa */
 #RecordingBadge {
     background-color: rgba(0, 0, 0, 140);

@@ -4,6 +4,8 @@
 
 #include <QFile>
 #include <QJsonDocument>
+
+#include <cmath>
 #include <QJsonParseError>
 #include <QSaveFile>
 
@@ -24,6 +26,16 @@ LessonPlayer::LessonPlayer(Board &board, QObject *parent)
         m_playing = true;
         m_finished = false;
         emit stateChanged();
+    });
+    // A lousa cresce para baixo conforme a aula precisa, e a vista acompanha
+    connect(&m_scene, &Scene::canvasHeightChanged, this, [this](double units) {
+        const double ppu = m_hand.params().pixelsPerUnit;
+        if (m_board.ensureHeight(int(std::ceil(units * ppu))))
+            emit canvasResized();
+    });
+    connect(&m_scene, &Scene::ensureVisible, this, [this](const QRectF &area) {
+        const double ppu = m_hand.params().pixelsPerUnit;
+        emit viewportRequested(QRectF(area.topLeft() * ppu, area.size() * ppu));
     });
     connect(&m_queue, &CommandQueue::speech, this, &LessonPlayer::speech);
     connect(&m_queue, &CommandQueue::stepFinished, this, &LessonPlayer::stepFinished);
@@ -191,10 +203,11 @@ void LessonPlayer::setSpeed(double factor)
 void LessonPlayer::startFromBeginning()
 {
     // Reiniciar redesenha o que já chegou; o resto continua entrando na fila
-    // Interrompe tudo e volta à lousa limpa
+    // Interrompe tudo e volta à lousa limpa, com uma tela só
     m_queue.clear();
+    m_board.reset();
     m_scene.reset();
-    m_board.clear();
+    emit canvasResized();
     emit boardChanged();
     emit speech(QString());
 

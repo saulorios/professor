@@ -89,6 +89,12 @@ void Eraser::apply(float cx, float cy)
     if (x0 > x1 || y0 > y1)
         return;
 
+    // O canvas pode ter crescido desde a última passada
+    const std::size_t cells = static_cast<std::size_t>(m_deposit.width())
+                            * static_cast<std::size_t>(m_deposit.height());
+    if (m_passOf.size() < cells)
+        m_passOf.resize(cells, 0u);
+
     const float radius2 = radius * radius;
     const float keep = 1.0f - m_params.eraserStrength;
     const std::uint32_t passSeed = m_params.noiseSeed + m_pass;
