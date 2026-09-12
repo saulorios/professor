@@ -147,8 +147,12 @@ Cada parte aceita `"posicao":[x,y,z]` (padrão `[0,0,0]`, Y para cima) e
 **Rótulos em 3D**:
 ```
 {"tipo":"rotular","alvo":"cubo","vertice":"frente_topo_direita","texto":"A"}
+{"tipo":"rotular","alvo":"casa","vertice":"telhado.frente_topo","texto":"cumeeira"}
 {"tipo":"cotar","alvo":"cubo","aresta":"largura","texto":"a = 3 cm"}
 ```
+- `vertice`: o nome do vértice; com várias partes, use `parte.vertice` para
+  desfazer a ambiguidade.
+- `cotar` põe a cota fora do objeto, paralela à aresta escolhida.
 
 ### Apagar
 

@@ -14,7 +14,7 @@ endif()
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 
 # Avisos do compilador ativados em todos os alvos; no MSVC, fontes lidos como UTF-8
 if(MSVC)
@@ -55,7 +55,8 @@ add_library(hand STATIC
 )
 target_link_libraries(hand PUBLIC physics)
 
-# scene/: elementos por id, posicionamento e geometria 2D
+# scene/: elementos por id, posicionamento, geometria 2D e objetos 3D
+# (QtGui entra por causa de QVector3D/QMatrix4x4 na projeção)
 add_library(scene STATIC
     src/scene/SceneParams.h
     src/scene/Geometry2D.h
@@ -67,10 +68,20 @@ add_library(scene STATIC
     src/scene/Layout.cpp
     src/scene/TextLayout.h
     src/scene/TextLayout.cpp
+    src/scene/solids/Mesh.h
+    src/scene/solids/Mesh.cpp
+    src/scene/solids/Solids.h
+    src/scene/solids/Solids.cpp
+    src/scene/Projection.h
+    src/scene/Projection.cpp
+    src/scene/HiddenLines.h
+    src/scene/HiddenLines.cpp
+    src/scene/Object3D.h
+    src/scene/Object3D.cpp
     src/scene/Scene.h
     src/scene/Scene.cpp
 )
-target_link_libraries(scene PUBLIC hand)
+target_link_libraries(scene PUBLIC hand Qt6::Gui)
 
 # protocol/: parser de JSON Lines e fila de comandos
 add_library(protocol STATIC

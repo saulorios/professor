@@ -38,6 +38,10 @@ public:
     // Desenha as polilinhas, um traço de giz por polilinha, na ordem recebida
     void draw(const std::vector<Polyline> &strokes, PressureLevel pressure, Motion motion = Motion::Shape);
 
+    // Mesma coisa, com uma pressão por traço (ex.: arestas ocultas mais leves)
+    void draw(const std::vector<Polyline> &strokes, const std::vector<PressureLevel> &pressures,
+              Motion motion = Motion::Shape);
+
     // Passa o apagador em zigue-zague sobre a área
     void erase(const QRectF &area);
 
@@ -71,6 +75,7 @@ private:
         bool last;        // fim de traço (giz levanta)
     };
 
+    float basePressure(PressureLevel level) const;
     void beginJob(Tool tool, double penLiftMs);
     void startPlayback();
     void finishLater();

@@ -37,17 +37,36 @@ void VirtualHand::setParams(const HandParams &params)
     m_timer.setInterval(m_params.tickIntervalMs);
 }
 
+float VirtualHand::basePressure(PressureLevel level) const
+{
+    return level == PressureLevel::Light  ? m_params.pressureLight
+         : level == PressureLevel::Strong ? m_params.pressureStrong
+                                          : m_params.pressureNormal;
+}
+
 void VirtualHand::draw(const std::vector<Polyline> &strokes, PressureLevel pressure, Motion motion)
 {
-    const float base = pressure == PressureLevel::Light  ? m_params.pressureLight
-                     : pressure == PressureLevel::Strong ? m_params.pressureStrong
-                                                         : m_params.pressureNormal;
+    const float base = basePressure(pressure);
     const bool writing = motion == Motion::Writing;
     const double speed = writing ? m_params.writingSpeed : m_params.baseSpeed;
 
     beginJob(Tool::Chalk, writing ? m_params.writingPenLiftMs : m_params.penLiftMs);
     for (const Polyline &stroke : strokes)
         appendStroke(stroke, speed, base, true);
+    startPlayback();
+}
+
+void VirtualHand::draw(const std::vector<Polyline> &strokes, const std::vector<PressureLevel> &pressures,
+                       Motion motion)
+{
+    const bool writing = motion == Motion::Writing;
+    const double speed = writing ? m_params.writingSpeed : m_params.baseSpeed;
+
+    beginJob(Tool::Chalk, writing ? m_params.writingPenLiftMs : m_params.penLiftMs);
+    for (std::size_t i = 0; i < strokes.size(); ++i) {
+        const PressureLevel level = i < pressures.size() ? pressures[i] : PressureLevel::Normal;
+        appendStroke(strokes[i], speed, basePressure(level), true);
+    }
     startPlayback();
 }
 

@@ -25,7 +25,8 @@ IA (via proxy que guarda a API key)
 src/protocol/  → parser incremental de JSON Lines, validação, fila de comandos
    ▼
 src/scene/     → layout (posições relativas, âncoras, ids), geometria 2D,
-                 texto (fontes Hershey), objetos 3D, projeção e arestas ocultas
+                 texto (fontes Hershey), sólidos 3D (solids/), projeção e
+                 arestas ocultas
    ▼
 src/hand/      → "mão do professor": converte polilinhas (formas e letras)
                  em traços temporizados (posição, pressão, tempo)
@@ -131,8 +132,8 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - `protocol/CommandQueue`: um comando por vez; só avança quando o anterior terminou
   de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
 - Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
-  linha, seta, arco), `escrever`, `conectar`, `destacar`, `pausa`, `fala`,
-  `apagar`, `limpar`. Os demais geram aviso e são pulados.
+  linha, seta, arco), `escrever`, `conectar`, `destacar`, `objeto_3d`, `rotular`,
+  `cotar`, `pausa`, `fala`, `apagar`, `limpar`. Os demais geram aviso e são pulados.
 - `scene/Scene`: guarda todos os elementos desenhados (com ou sem id) com a
   bounding box e o ponto de referência; `conectar` liga as bordas dos elementos
   (elipse inscrita na bounding box para círculos/elipses, a própria caixa para os
@@ -152,8 +153,10 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   e velocidade (0.5x, 1x, 2x, 4x); a `fala` aparece como legenda (`#Caption`)
   na faixa reservada da base da lousa até a próxima fala.
 - Exemplos: `examples/formas.jsonl` (formas, conectar, apagar, limpar),
-  `examples/texto.jsonl` (título, frases acentuadas e fórmulas) e
-  `examples/agua.jsonl` (Exemplo 1 do protocolo: posicionamento relativo).
+  `examples/texto.jsonl` (título, frases acentuadas e fórmulas),
+  `examples/agua.jsonl` (Exemplo 1 do protocolo: posicionamento relativo),
+  `examples/cubo.jsonl` e `examples/casa.jsonl` (Exemplos 2 e 3) e
+  `examples/solidos.jsonl` (os seis sólidos em cada uma das quatro vistas).
 
 ## Motor de layout (`scene/Layout`)
 
@@ -207,6 +210,54 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
 - A mão escreve com `Motion::Writing`: um pouco mais rápida que nas formas
   (`writingSpeed`) e com levantada de giz menor entre traços (`writingPenLiftMs`).
 
+## Objetos 3D (`objeto_3d`, `rotular`, `cotar`)
+
+O objeto é montado como modelo 3D de arestas e faces, projetado para 2D **uma
+única vez** e entregue à mão como polilinhas comuns. Não há câmera em tempo real
+nem re-renderização: depois de desenhado é giz como qualquer outro.
+
+- `scene/solids/Mesh`: vértices (`QVector3D`), faces convexas (normal para fora
+  e referencial de decalque `origin`/`uAxis`/`vAxis`, com `v = 0` na base) e
+  arestas únicas com as duas faces vizinhas. Nomes semânticos nas faces
+  (frente, tras, esquerda, direita, topo, base) e nos vértices
+  (`frente_topo_direita`, …). Eixos do modelo: X à direita, Y para cima, Z para
+  longe; cada parte nasce apoiada em `y = 0` e é movida por `posicao`.
+- `scene/solids/Solids`: `caixa`, `prisma_triangular`, `piramide` (3 a 8 lados),
+  `cilindro`, `cone` e `esfera`. Nos três curvos a malha facetada serve só para
+  a oclusão: o desenho usa as silhuetas (elipses das bases e geratrizes de
+  contorno; na esfera, o contorno e o equador tracejado).
+- `scene/Projection`: `cavaleira` (`x' = x + z·reducao·cos(angulo)`,
+  `y' = y + z·reducao·sin(angulo)`), `isometrica` (ortográfica com os eixos a
+  30°), `perspectiva_1` e `perspectiva_2` (câmera pinhole com `QMatrix4x4`;
+  `rotacao` gira o objeto em torno de Y e `altura_olho` põe o olho abaixo, no
+  meio ou acima). A distância da câmera vem do campo de visão (`fieldOfView`,
+  ~35°) para não distorcer demais.
+- `scene/HiddenLines`: face visível quando a normal aponta para o observador.
+  Entre partes, cada aresta é amostrada e cada amostra é testada contra as faces
+  visíveis das outras partes (ponto-em-polígono na projeção + profundidade ao
+  longo do raio). Faces coladas entre duas partes (a base do telhado sobre o
+  topo da caixa) são internas e não contam. Os trechos ocultos são omitidos ou
+  tracejados conforme `arestas_ocultas` (padrão: tracejar nas vistas paralelas,
+  omitir nas perspectivas).
+- `scene/Object3D`: junta tudo. Decalques são mapeados na face em 3D antes de
+  projetar (portas e janelas acompanham a perspectiva) e decalque em face oculta
+  não é desenhado. Arestas colineares contíguas de partes diferentes são fundidas
+  e desenhadas uma vez só. Ordem de desenho: face da frente → arestas de
+  profundidade → demais arestas → ocultas tracejadas (pressão leve) → decalques;
+  dentro de cada grupo os trechos que se encontram viram um traço contínuo.
+- Escala: 1:1 com as unidades da lousa em `cavaleira` e `isometrica` (uma aresta
+  de 24 mede 24 na frente do objeto); nas perspectivas a aresta vertical mais
+  próxima do observador fica com a altura declarada. Se não couber na área útil,
+  a escala é reduzida uniformemente, com aviso. A bounding box 2D é obstáculo
+  normal no Layout; arestas, decalques e rótulos internos não colidem entre si.
+- `rotular`: texto perto do vértice, empurrado para fora da silhueta.
+  `cotar` (`largura`, `altura`, `profundidade`): escolhe uma aresta visível do
+  lado de fora, desenha a linha paralela a ela com pequenos traços nas pontas e
+  o texto no meio. Ambos contam como obstáculos para os outros elementos.
+- Depuração (F12): além das caixas, a `BoardCanvas` mostra as arestas ocultas em
+  outra cor (mesmo com `omitir`), os pontos de fuga e as linhas finas até eles.
+- Constantes em `SceneParams` (bloco "Objetos 3D").
+
 ## Paleta
 
 - UI (topbar e body): fundo `#1F1F1F`, separador `#2B2B2B`, texto `#CCCCCC`.
@@ -249,6 +300,6 @@ Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 - [x] Etapa 2 — Mão virtual + player de .jsonl + formas 2D
 - [x] Etapa 3 — Texto com fontes Hershey
 - [x] Etapa 4 — Motor de layout
-- [ ] Etapa 5 — Objetos 3D em perspectiva
+- [x] Etapa 5 — Objetos 3D em perspectiva
 - [ ] Etapa 6 — Cliente de rede e IA
 - [ ] Etapa 7 — Renderização em OpenGL (opcional)

@@ -88,6 +88,7 @@ void CommandQueue::startNext()
         m_pauseRemainingMs = std::max(0.0, command.value("segundos").toDouble()) * 1000.0;
         startPauseTimer();
     } else if (type == "forma" || type == "escrever" || type == "conectar" || type == "destacar"
+               || type == "objeto_3d" || type == "rotular" || type == "cotar"
                || type == "apagar" || type == "limpar") {
         m_scene.execute(command);
     } else {

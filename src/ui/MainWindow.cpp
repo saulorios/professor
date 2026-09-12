@@ -112,6 +112,21 @@ void MainWindow::updateOverlay()
     for (const SceneElement &element : scene.elements())
         boxes.push_back({toPixels(element.bounds), element.label, false});
     m_canvas->setOverlay(boxes);
+
+    // Objetos 3D: arestas ocultas e linhas de fuga (mesmo com "omitir")
+    const SceneDebugGeometry geometry = scene.debugGeometry();
+    std::vector<OverlayLine> lines;
+    const auto addPolylines = [&lines, pixelsPerUnit](const std::vector<Polyline> &polylines, bool vanishing) {
+        for (const Polyline &polyline : polylines)
+            for (std::size_t i = 1; i < polyline.size(); ++i)
+                lines.push_back({QLineF(polyline[i - 1] * pixelsPerUnit, polyline[i] * pixelsPerUnit), vanishing});
+    };
+    addPolylines(geometry.hiddenLines, false);
+    addPolylines(geometry.vanishingLines, true);
+    std::vector<QPointF> points;
+    for (const QPointF &point : geometry.vanishingPoints)
+        points.push_back(point * pixelsPerUnit);
+    m_canvas->setOverlayGeometry(lines, points);
 }
 
 void MainWindow::openLesson()

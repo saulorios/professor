@@ -38,4 +38,25 @@ struct SceneParams {
     double kerning = 2.0;           // aproximação dos pares da tabela (unidades da fonte)
     double tracking = -2.0;         // ajuste do espaço entre letras (unidades da fonte; < 0 aproxima)
     double cursiveTracking = 0.0;   // na cursiva as letras se emendam nos próprios limites
+
+    // --- Objetos 3D (comando "objeto_3d") ---
+    double cavalierAngle = 45.0;      // "cavaleira": ângulo do eixo da profundidade
+    double cavalierReduction = 0.5;   // "cavaleira": redução da profundidade
+    double isometricAngle = 30.0;     // "isometrica": inclinação dos eixos
+    double twoPointRotation = 30.0;   // "perspectiva_2": "rotacao" padrão
+    double fieldOfView = 35.0;        // abertura da câmera pinhole (evita distorção exagerada)
+    double eyeLow = -0.25;            // "altura_olho": fração da altura do objeto onde fica o olho
+    double eyeMedium = 0.5;
+    double eyeHigh = 1.5;
+    int curveSegments = 48;           // facetas da malha dos sólidos curvos (só para oclusão)
+    int curveSamples = 96;            // pontos das elipses e silhuetas desenhadas
+    int sphereRings = 16;             // paralelos da malha da esfera
+    double hiddenSampleSpacing = 0.25;// passo da amostragem que separa visível de oculto
+    double labelSize = 3.0;           // "rotular": tamanho do texto
+    double labelGap = 1.0;            // "rotular": afastamento do vértice
+    double dimensionOffset = 3.0;     // "cotar": distância da linha de cota até a aresta
+    double dimensionTick = 1.2;       // "cotar": traço nas extremidades da cota
+    double dimensionTextSize = 3.0;
+    double dimensionTextGap = 0.8;    // folga entre a linha de cota e o texto
+    double vanishingLimit = 3000.0;   // pontos de fuga além disso são descartados (retas paralelas)
 };

@@ -85,6 +85,14 @@ void BoardCanvas::setOverlay(const std::vector<OverlayBox> &boxes)
         update();
 }
 
+void BoardCanvas::setOverlayGeometry(const std::vector<OverlayLine> &lines, const std::vector<QPointF> &points)
+{
+    m_overlayLines = lines;
+    m_overlayPoints = points;
+    if (m_overlayVisible)
+        update();
+}
+
 void BoardCanvas::setOverlayVisible(bool visible)
 {
     m_overlayVisible = visible;
@@ -118,6 +126,20 @@ void BoardCanvas::paintEvent(QPaintEvent *)
         if (!box.label.isEmpty())
             painter.drawText(r.topLeft() + QPointF(2.0, -3.0), box.label);
     }
+
+    // Objetos 3D: arestas ocultas (mesmo quando não são desenhadas) e fuga
+    for (const OverlayLine &line : m_overlayLines) {
+        QPen pen(line.vanishing ? m_params.debugVanishingColor : m_params.debugHiddenColor);
+        pen.setCosmetic(true);
+        pen.setStyle(line.vanishing ? Qt::DotLine : Qt::DashLine);
+        painter.setPen(pen);
+        painter.drawLine(QLineF(board.topLeft() + line.line.p1() * scale,
+                                board.topLeft() + line.line.p2() * scale));
+    }
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(m_params.debugVanishingColor);
+    for (const QPointF &point : m_overlayPoints)
+        painter.drawEllipse(board.topLeft() + point * scale, m_params.debugPointRadius, m_params.debugPointRadius);
 }
 
 void BoardCanvas::resizeEvent(QResizeEvent *event)

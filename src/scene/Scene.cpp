@@ -2,6 +2,7 @@
 #include "JsonHelpers.h"
 
 #include <QDebug>
+#include <QJsonArray>
 #include <QTimer>
 
 #include <algorithm>
@@ -34,6 +35,15 @@ double length(const QPointF &p)
     return std::hypot(p.x(), p.y());
 }
 
+// Centro médio de uma polilinha (usado para achar o "lado de fora" do objeto)
+QPointF centroid(const Polyline &points)
+{
+    QPointF sum;
+    for (const QPointF &p : points)
+        sum += p;
+    return points.empty() ? sum : sum / double(points.size());
+}
+
 // Parâmetros do texto em cursiva: espaçamento próprio e sem os pares de
 // kerning, que foram escolhidos para a fonte normal
 SceneParams cursiveParams(const SceneParams &params)
@@ -42,6 +52,26 @@ SceneParams cursiveParams(const SceneParams &params)
     cursive.tracking = params.cursiveTracking;
     cursive.kerning = 0.0;
     return cursive;
+}
+
+// Até onde o raio que sai de `origin` na direção `direction` ainda está dentro
+// do polígono (usado para jogar o rótulo para fora da silhueta do objeto)
+double exitDistance(const Polyline &polygon, const QPointF &origin, const QPointF &direction)
+{
+    double exit = 0.0;
+    for (std::size_t i = 0; i < polygon.size(); ++i) {
+        const QPointF a = polygon[i];
+        const QPointF edge = polygon[(i + 1) % polygon.size()] - a;
+        const double denominator = direction.x() * edge.y() - direction.y() * edge.x();
+        if (std::abs(denominator) < 1e-12)
+            continue;
+        const QPointF d = a - origin;
+        const double t = (d.x() * edge.y() - d.y() * edge.x()) / denominator;
+        const double s = (d.x() * direction.y() - d.y() * direction.x()) / denominator;
+        if (t > 0.0 && s >= 0.0 && s <= 1.0)
+            exit = std::max(exit, t);
+    }
+    return exit;
 }
 
 } // namespace
@@ -53,6 +83,7 @@ Scene::Scene(VirtualHand &hand, const SceneParams &params, QObject *parent)
     , m_layout(params)
     , m_textLayout(m_font, params)
     , m_cursiveLayout(m_cursiveFont, cursiveParams(params))
+    , m_builder3D(params, m_layout, m_textLayout)
     , m_hand(hand)
 {
     QString error;
@@ -80,6 +111,12 @@ void Scene::execute(const QJsonObject &command)
         connectElements(command);
     else if (type == "destacar")
         highlight(command);
+    else if (type == "objeto_3d")
+        drawObject(command);
+    else if (type == "rotular")
+        labelVertex(command);
+    else if (type == "cotar")
+        dimensionEdge(command);
     else if (type == "apagar")
         eraseElement(command);
     else if (type == "limpar")
@@ -94,7 +131,22 @@ void Scene::reset()
     m_waitingHand = false;
     m_hand.cancel();
     m_elements.clear();
+    m_objects.clear();
     emit elementsChanged();
+}
+
+SceneDebugGeometry Scene::debugGeometry() const
+{
+    SceneDebugGeometry geometry;
+    for (const Object3DInfo &object : m_objects) {
+        geometry.hiddenLines.insert(geometry.hiddenLines.end(), object.hiddenLines.begin(),
+                                    object.hiddenLines.end());
+        geometry.vanishingLines.insert(geometry.vanishingLines.end(), object.vanishingLines.begin(),
+                                       object.vanishingLines.end());
+        geometry.vanishingPoints.insert(geometry.vanishingPoints.end(), object.vanishingPoints.begin(),
+                                        object.vanishingPoints.end());
+    }
+    return geometry;
 }
 
 QRectF Scene::bounds(const QString &id) const
@@ -292,6 +344,179 @@ void Scene::highlight(const QJsonObject &command)
     submit(command, lines);
 }
 
+void Scene::drawObject(const QJsonObject &command)
+{
+    std::vector<ObjectStroke> strokes;
+    Object3DInfo info;
+    QString error;
+    if (!m_builder3D.build(command, m_elements, pressureLevel(command), &strokes, &info, &error))
+        return fail(error);
+
+    info.id = command.value("id").toString();
+    if (!info.id.isEmpty())
+        forgetObject(info.id);
+    m_objects.push_back(info);
+
+    SceneElement element;
+    element.bounds = info.bounds;
+    element.anchor = info.bounds.center();
+    store(command, element, "objeto_3d");
+
+    // Cada traço leva a sua pressão (as arestas ocultas são leves)
+    std::vector<Polyline> lines;
+    std::vector<PressureLevel> pressures;
+    lines.reserve(strokes.size());
+    pressures.reserve(strokes.size());
+    for (const ObjectStroke &stroke : strokes) {
+        lines.push_back(stroke.points);
+        pressures.push_back(stroke.pressure);
+    }
+    m_waitingHand = true;
+    m_hand.draw(lines, pressures);
+}
+
+void Scene::labelVertex(const QJsonObject &command)
+{
+    const QString targetId = command.value("alvo").toString();
+    const Object3DInfo *object = findObject(targetId);
+    if (!object)
+        return fail(QString("rotular: objeto 3D '%1' não existe").arg(targetId));
+
+    // "vertice" pode vir como "parte.nome" quando o objeto tem várias partes
+    const QString wanted = command.value("vertice").toString();
+    const int dot = wanted.indexOf('.');
+    const QString part = dot > 0 ? wanted.left(dot) : QString();
+    const QString name = dot > 0 ? wanted.mid(dot + 1) : wanted;
+    const auto found = std::find_if(object->vertices.begin(), object->vertices.end(),
+                                    [&](const Object3DVertex &v) {
+                                        return v.name == name && (part.isEmpty() || v.part == part);
+                                    });
+    if (found == object->vertices.end())
+        return fail(QString("rotular: vértice '%1' não existe em '%2'").arg(wanted, targetId));
+
+    const QString text = command.value("texto").toString();
+    if (text.trimmed().isEmpty())
+        return fail("rotular precisa de 'texto'");
+    std::vector<Polyline> strokes = m_textLayout.layout(text, m_params.labelSize);
+    if (strokes.empty())
+        return fail("rotular: nenhum caractere desenhável");
+
+    // Deslocado para fora do objeto, na direção que sai do centro da silhueta
+    QPointF direction = found->at - centroid(object->hull);
+    const double len = length(direction);
+    direction = len > 0.0 ? direction / len : QPointF(0.0, -1.0);
+    const QRectF local = Geometry2D::bounds(strokes);
+    const double reach = std::abs(direction.x()) * local.width() / 2 + std::abs(direction.y()) * local.height() / 2;
+    // Vértices no meio do desenho (como a quina mais próxima de um cubo) exigem
+    // sair da silhueta antes de afastar o texto
+    const double out = exitDistance(object->hull, found->at, direction);
+    const QPointF at = found->at + direction * (out + m_params.labelGap + reach);
+
+    QJsonObject placed = command;
+    placed["em"] = QJsonArray{at.x(), at.y()};
+    const QPointF offset = m_layout.place(placed, local, local.center(), m_elements);
+    translate(strokes, offset);
+
+    SceneElement element;
+    element.bounds = Geometry2D::bounds(strokes);
+    element.anchor = element.bounds.center();
+    store(command, element, QString("rótulo \"%1\"").arg(text));
+    m_waitingHand = true;
+    m_hand.draw(strokes, pressureLevel(command), Motion::Writing);
+}
+
+void Scene::dimensionEdge(const QJsonObject &command)
+{
+    const QString targetId = command.value("alvo").toString();
+    const Object3DInfo *object = findObject(targetId);
+    if (!object)
+        return fail(QString("cotar: objeto 3D '%1' não existe").arg(targetId));
+
+    const QString axisName = command.value("aresta").toString();
+    const int axis = axisName == "largura" ? 0 : axisName == "altura" ? 1 : axisName == "profundidade" ? 2 : -1;
+    if (axis < 0)
+        return fail(QString("cotar: aresta '%1' desconhecida (largura, altura ou profundidade)").arg(axisName));
+
+    // Aresta visível mais afastada do miolo do desenho: a cota fica por fora
+    const Object3DEdge *chosen = nullptr;
+    for (const Object3DEdge &edge : object->edges) {
+        if (edge.axis != axis)
+            continue;
+        if (!chosen) {
+            chosen = &edge;
+            continue;
+        }
+        if (chosen->visible != edge.visible) {
+            if (edge.visible)
+                chosen = &edge;
+            continue;
+        }
+        const QPointF a = (edge.a + edge.b) / 2.0, b = (chosen->a + chosen->b) / 2.0;
+        const bool better = axis == 1 ? (a.x() < b.x() - 1e-6 || (std::abs(a.x() - b.x()) < 1e-6 && a.y() > b.y()))
+                          : axis == 0 ? (a.y() > b.y() + 1e-6 || (std::abs(a.y() - b.y()) < 1e-6 && a.x() < b.x()))
+                                      : (a.y() > b.y() + 1e-6 || (std::abs(a.y() - b.y()) < 1e-6 && a.x() > b.x()));
+        if (better)
+            chosen = &edge;
+    }
+    if (!chosen)
+        return fail(QString("cotar: '%1' não tem aresta de %2").arg(targetId, axisName));
+
+    QPointF from = chosen->a, to = chosen->b;
+    if (to.x() < from.x() || (std::abs(to.x() - from.x()) < 1e-6 && to.y() < from.y()))
+        std::swap(from, to);
+    const QPointF along = to - from;
+    const double len = length(along);
+    if (len <= 0.0)
+        return fail("cotar: aresta de comprimento zero na projeção");
+    const QPointF unit = along / len;
+    QPointF normal(-unit.y(), unit.x());
+    const QPointF middle = (from + to) / 2.0;
+    if (QPointF::dotProduct(normal, middle - centroid(object->hull)) < 0.0)
+        normal = -normal;
+
+    const QPointF shift = normal * m_params.dimensionOffset;
+    const QPointF tick = normal * (m_params.dimensionTick / 2.0);
+    std::vector<Polyline> lines{{from + shift, to + shift},
+                                {from + shift - tick, from + shift + tick},
+                                {to + shift - tick, to + shift + tick}};
+
+    // Texto no meio da cota, do lado de fora
+    const QString text = command.contains("texto") ? command.value("texto").toString()
+                                                   : QString::number(chosen->length3D, 'g', 3);
+    std::vector<Polyline> label = m_textLayout.layout(text, m_params.dimensionTextSize);
+    if (!label.empty()) {
+        const QRectF local = Geometry2D::bounds(label);
+        const double reach = std::abs(normal.x()) * local.width() / 2 + std::abs(normal.y()) * local.height() / 2;
+        const QPointF at = middle + shift + normal * (m_params.dimensionTextGap + reach);
+        translate(label, at - local.center());
+        lines.insert(lines.end(), label.begin(), label.end());
+    }
+
+    SceneElement element;
+    element.bounds = Geometry2D::bounds(lines);
+    element.anchor = element.bounds.center();
+    store(command, element, QString("cota \"%1\"").arg(text));
+    m_waitingHand = true;
+    m_hand.draw(lines, pressureLevel(command));
+}
+
+const Object3DInfo *Scene::findObject(const QString &id) const
+{
+    if (id.isEmpty())
+        return nullptr;
+    for (auto it = m_objects.rbegin(); it != m_objects.rend(); ++it)
+        if (it->id == id)
+            return &*it;
+    return nullptr;
+}
+
+void Scene::forgetObject(const QString &id)
+{
+    m_objects.erase(std::remove_if(m_objects.begin(), m_objects.end(),
+                                   [&](const Object3DInfo &object) { return object.id == id; }),
+                    m_objects.end());
+}
+
 void Scene::eraseElement(const QJsonObject &command)
 {
     const QString id = command.value("id").toString();
@@ -300,6 +525,7 @@ void Scene::eraseElement(const QJsonObject &command)
         return fail(QString("apagar: elemento '%1' não existe").arg(id));
     const QRectF area = element->bounds;
     m_elements.erase(m_elements.begin() + (element - m_elements.data()));
+    forgetObject(id);
     emit elementsChanged();
     m_waitingHand = true;
     m_hand.erase(area);
@@ -308,6 +534,7 @@ void Scene::eraseElement(const QJsonObject &command)
 void Scene::clearAll()
 {
     m_elements.clear();
+    m_objects.clear();
     emit elementsChanged();
     m_waitingHand = true;
     m_hand.clearBoard();

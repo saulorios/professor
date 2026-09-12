@@ -1,0 +1,3 @@
+{"tipo":"fala","texto":"Vamos desenhar uma casa vista de quina."}
+{"tipo":"objeto_3d","id":"casa","vista":"perspectiva_2","rotacao":35,"altura_olho":"media","ancora":"centro","arestas_ocultas":"omitir","partes":[{"id":"corpo","solido":"caixa","tamanho":[40,22,28]},{"id":"telhado","solido":"prisma_triangular","tamanho":[40,12,28],"posicao":[0,22,0]}],"decalques":[{"parte":"corpo","face":"frente","forma":"retangulo","u":0.42,"v":0,"largura":0.16,"altura":0.6},{"parte":"corpo","face":"frente","forma":"retangulo","u":0.1,"v":0.4,"largura":0.18,"altura":0.3},{"parte":"corpo","face":"direita","forma":"retangulo","u":0.35,"v":0.4,"largura":0.3,"altura":0.3}]}
+{"tipo":"fala","texto":"Repare que as linhas horizontais convergem para dois pontos de fuga."}

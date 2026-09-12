@@ -27,7 +27,10 @@ struct BoardCanvasParams {
     // Modo de depuração (F12)
     QColor debugBoxColor{0x4F, 0xC1, 0xFF};   // bounding boxes e ids
     QColor debugAreaColor{0xD7, 0xBA, 0x7D};  // contorno da área útil
+    QColor debugHiddenColor{0xC5, 0x86, 0xC0};    // arestas ocultas dos objetos 3D
+    QColor debugVanishingColor{0x6A, 0x99, 0x55}; // pontos e linhas de fuga
     int debugFontPx = 11;
+    int debugPointRadius = 4;
 };
 
 // Retângulo do modo de depuração, em pixels da lousa
@@ -35,6 +38,13 @@ struct OverlayBox {
     QRectF rect;
     QString label;
     bool area = false;   // contorno da área útil (tracejado)
+};
+
+// Linha do modo de depuração, em pixels da lousa: aresta oculta de um objeto 3D
+// ou linha fina até um ponto de fuga
+struct OverlayLine {
+    QLineF line;
+    bool vanishing = false;
 };
 
 // Lousa: converte mouse e mesa digitalizadora em ChalkSamples, alimenta a
@@ -68,6 +78,8 @@ public slots:
     // Modo de depuração: retângulos e rótulos desenhados por cima da lousa com
     // QPainter, fora do DepositBuffer
     void setOverlay(const std::vector<OverlayBox> &boxes);
+    // Linhas e pontos extras dos objetos 3D (arestas ocultas e pontos de fuga)
+    void setOverlayGeometry(const std::vector<OverlayLine> &lines, const std::vector<QPointF> &points);
     void setOverlayVisible(bool visible);
 
 protected:
@@ -108,5 +120,7 @@ private:
     double m_captionBandPx = 0.0;   // px da lousa
 
     std::vector<OverlayBox> m_overlay;
+    std::vector<OverlayLine> m_overlayLines;
+    std::vector<QPointF> m_overlayPoints;
     bool m_overlayVisible = false;
 };
