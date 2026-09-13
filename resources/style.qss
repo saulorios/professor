@@ -55,20 +55,14 @@ TitleBarButton {
     background: transparent;
     border: none;
     qproperty-iconColor: #CCCCCC;
-    qproperty-iconHoverColor: #CCCCCC;
+    qproperty-iconHoverColor: #FFFFFF;
+    qproperty-hoverColor: #2A2D2E;   /* círculo de hover, desenhado pelo botão */
 }
 
-TitleBarButton:hover {
-    background-color: #2A2D2E;
-}
-
-/* Fechar: hover vermelho com ícone branco */
+/* Fechar: círculo vermelho com ícone branco */
 TitleBarButton#CloseButton {
     qproperty-iconHoverColor: #FFFFFF;
-}
-
-TitleBarButton#CloseButton:hover {
-    background-color: #E81123;
+    qproperty-hoverColor: #E81123;
 }
 
 /* Menus abertos a partir da topbar */

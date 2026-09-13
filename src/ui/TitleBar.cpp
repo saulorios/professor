@@ -16,6 +16,7 @@ TitleBarButton::TitleBarButton(Kind kind, const TitleBarParams &params, QWidget 
     : QPushButton(parent)
     , m_kind(kind)
     , m_iconSize(params.iconSize)
+    , m_hoverSize(params.hoverSize)
 {
     setFixedSize(params.buttonWidth, params.height);
     setFocusPolicy(Qt::NoFocus);
@@ -41,12 +42,31 @@ void TitleBarButton::setIconHoverColor(const QColor &color)
     update();
 }
 
+void TitleBarButton::setHoverColor(const QColor &color)
+{
+    m_hoverColor = color;
+    update();
+}
+
 void TitleBarButton::paintEvent(QPaintEvent *event)
 {
-    // Fundo (normal e :hover) desenhado a partir do QSS
+    // Fundo normal (transparente) vindo do QSS; o QSS não tem mais :hover
     QPushButton::paintEvent(event);
 
     QPainter painter(this);
+
+    // Hover circular, do mesmo tamanho qualquer que seja a área de clique
+    if (underMouse()) {
+        const QRectF hoverRect((width() - m_hoverSize) / 2.0, (height() - m_hoverSize) / 2.0, m_hoverSize,
+                               m_hoverSize);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(m_hoverColor);
+        painter.drawEllipse(hoverRect);
+        // Linhas retas de 1 px ficam nítidas sem antialiasing
+        painter.setRenderHint(QPainter::Antialiasing, false);
+    }
+
     QPen pen(underMouse() ? m_iconHoverColor : m_iconColor);
     pen.setWidthF(1.0);
     painter.setPen(pen);
@@ -67,14 +87,21 @@ void TitleBarButton::paintEvent(QPaintEvent *event)
         break;
 
     case Kind::Restore: {
-        const int d = 2; // deslocamento da janela de trás
-        // Janela da frente
-        painter.drawRect(x, y + d, s - 1 - d, s - 1 - d);
-        // Janela de trás (apenas as partes não cobertas pela da frente)
-        painter.drawLine(x + d, y, x + s - 1, y);
-        painter.drawLine(x + s - 1, y, x + s - 1, y + s - 1 - d);
-        painter.drawLine(x + d, y, x + d, y + d - 1);
-        painter.drawLine(x + s - d, y + s - 1 - d, x + s - 1, y + s - 1 - d);
+        // const int d = 2; // deslocamento da janela de trás
+        // // Janela da frente
+        // painter.drawRect(x, y + d, s - 1 - d, s - 1 - d);
+        // // Janela de trás (apenas as partes não cobertas pela da frente)
+        // painter.drawLine(x + d, y, x + s - 1, y);
+        // painter.drawLine(x + s - 1, y, x + s - 1, y + s - 1 - d);
+        // painter.drawLine(x + d, y, x + d, y + d - 1);
+        // painter.drawLine(x + s - d, y + s - 1 - d, x + s - 1, y + s - 1 - d);
+        const int offset = 3;
+        const int rectSize = s - offset;
+        // Janela de trás (deslocada para cima e direita)
+        painter.drawRect(x + offset, y, rectSize - 1, rectSize - 1);
+        // Janela da frente (deslocada para baixo e esquerda)
+        painter.fillRect(QRect(x, y + offset, rectSize, rectSize), Qt::transparent);
+        painter.drawRect(x, y + offset, rectSize - 1, rectSize - 1);
         break;
     }
 

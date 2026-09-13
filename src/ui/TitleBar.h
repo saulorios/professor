@@ -13,21 +13,24 @@ class QMenuBar;
 struct TitleBarParams {
     int height = 35;          // altura útil da topbar
     int separatorHeight = 1;  // linha separadora (border-bottom no QSS)
-    int buttonWidth = 46;     // botões minimizar / maximizar / fechar
-    int iconSize = 10;        // lado dos ícones dos botões
+    int buttonWidth = 42;     // área de clique dos botões minimizar / maximizar / fechar
+    int iconSize = 11;        // lado dos ícones dos botões
+    int hoverSize = 24;       // diâmetro do círculo de hover (menor que a área de clique)
     int logoSize = 16;
     int leftMargin = 10;      // espaço antes do logo
     int logoSpacing = 6;      // espaço entre o logo e o menu
 };
 
 // Botão de controle da janela (minimizar, maximizar/restaurar, fechar).
-// O fundo vem do QSS; o ícone é desenhado com QPainter e suas cores também
-// são definidas no QSS (qproperty-iconColor / qproperty-iconHoverColor).
+// O botão desenha tudo com QPainter: o hover é um círculo centralizado (a área
+// de clique continua sendo o botão inteiro) e o ícone vem por cima. As cores
+// vêm do QSS (qproperty-hoverColor / qproperty-iconColor / qproperty-iconHoverColor).
 class TitleBarButton : public QPushButton
 {
     Q_OBJECT
     Q_PROPERTY(QColor iconColor READ iconColor WRITE setIconColor)
     Q_PROPERTY(QColor iconHoverColor READ iconHoverColor WRITE setIconHoverColor)
+    Q_PROPERTY(QColor hoverColor READ hoverColor WRITE setHoverColor)
 
 public:
     enum class Kind { Minimize, Maximize, Restore, Close };
@@ -42,14 +45,19 @@ public:
     QColor iconHoverColor() const { return m_iconHoverColor; }
     void setIconHoverColor(const QColor &color);
 
+    QColor hoverColor() const { return m_hoverColor; }
+    void setHoverColor(const QColor &color);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
     Kind m_kind;
     int m_iconSize;
+    int m_hoverSize;
     QColor m_iconColor = QColor(0xCC, 0xCC, 0xCC);
-    QColor m_iconHoverColor = QColor(0xCC, 0xCC, 0xCC);
+    QColor m_iconHoverColor = QColor(0xFF, 0xFF, 0xFF);
+    QColor m_hoverColor = QColor(0x2A, 0x2D, 0x2E);
 };
 
 // Barra de título customizada: logo + menu à esquerda, título ao centro
