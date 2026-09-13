@@ -1,5 +1,8 @@
 #include "TextLayout.h"
 
+#include "handwriting/data/GlyphDatabase.h"
+#include "physics/Noise.h"
+
 #include <QDebug>
 
 #include <algorithm>
@@ -31,12 +34,77 @@ TextLayout::TextLayout(const HersheyFont &font, const SceneParams &params)
 {
 }
 
+void TextLayout::setHandwriting(const handwriting::GlyphDatabase *database, std::uint32_t seed)
+{
+    m_handwriting = database;
+    m_handwritingSeed = seed;
+}
+
+const handwriting::GlyphVariant *TextLayout::recorded(QChar character, int occurrence) const
+{
+    if (!m_handwriting)
+        return nullptr;
+    const handwriting::Glyph *glyph = m_handwriting->glyph(QString(character));
+    if (!glyph)
+        return nullptr;
+    // Hash da posição na frase (nada de rand()): o mesmo texto sai igual, e duas
+    // letras iguais seguidas tendem a usar variantes diferentes
+    const float pick = noise::value(std::int32_t(character.unicode()), occurrence, m_handwritingSeed);
+    const std::size_t index = std::min(glyph->variants.size() - 1, std::size_t(pick * glyph->variants.size()));
+    return &glyph->variants[index];
+}
+
+void TextLayout::fitRecorded(QChar character, const handwriting::GlyphVariant &variant, double *scale,
+                             double *dy) const
+{
+    *scale = 1.0;
+    *dy = 0.0;
+    const QRectF box = variant.metrics.bounds;
+    const HersheyGlyph *reference = m_font.glyph(character);
+    if (!m_params.handwritingNormalize || !reference || box.height() < 1e-6)
+        return;
+    // Altura e base da mesma letra na fonte, em alturas de maiúscula (Y para baixo):
+    // "A" vai da linha de base até 1, "a" até a altura das minúsculas, "g" desce
+    double top = 0.0, bottom = 0.0;
+    bool first = true;
+    for (const Polyline &stroke : reference->strokes)
+        for (const QPointF &p : stroke) {
+            top = first ? p.y() : std::min(top, p.y());
+            bottom = first ? p.y() : std::max(bottom, p.y());
+            first = false;
+        }
+    if (first || bottom - top < 1e-6)
+        return;
+    const double wantedTop = (top - m_font.baseline()) / m_font.capHeight();
+    const double wantedBottom = (bottom - m_font.baseline()) / m_font.capHeight();
+    *scale = std::clamp((wantedBottom - wantedTop) / box.height(), m_params.handwritingMinScale,
+                        m_params.handwritingMaxScale);
+    *dy = wantedBottom - box.bottom() * *scale;
+}
+
+double TextLayout::recordedWidth(QChar character) const
+{
+    const handwriting::Glyph *glyph = m_handwriting ? m_handwriting->glyph(QString(character)) : nullptr;
+    if (!glyph)
+        return -1.0;
+    double sum = 0.0;
+    for (const handwriting::GlyphVariant &variant : glyph->variants) {
+        double scale = 1.0, dy = 0.0;
+        fitRecorded(character, variant, &scale, &dy);
+        sum += variant.metrics.bounds.width() * scale;
+    }
+    return sum / double(glyph->variants.size());
+}
+
 double TextLayout::advance(QChar character, Script script, double size) const
 {
+    const double effective = script == Script::Normal ? size : size * m_params.scriptScale;
+    const double width = recordedWidth(character);
+    if (width >= 0.0)
+        return (width + m_params.handwritingSpacing) * effective;
     const HersheyGlyph *glyph = m_font.glyph(character);
     if (!glyph)
         return 0.0;
-    const double effective = script == Script::Normal ? size : size * m_params.scriptScale;
     const double scale = effective / m_font.capHeight();
     return (glyph->right - glyph->left + m_params.tracking) * scale;
 }
@@ -123,6 +191,54 @@ QRectF TextLayout::emitLine(const std::vector<Group> &groups, double size, doubl
         const double groupSize = size * group.scale;
         for (const Unit &unit : group.units) {
             for (const Atom &atom : unit.atoms) {
+                const double effective = atom.script == Script::Normal ? groupSize
+                                                                       : groupSize * m_params.scriptScale;
+                const double shift = atom.script == Script::Superscript ? -m_params.superscriptRise * groupSize
+                                   : atom.script == Script::Subscript  ? m_params.subscriptDrop * groupSize
+                                                                       : 0.0;
+                const auto extend = [&](const QPointF &point) {
+                    left = first ? point.x() : std::min(left, point.x());
+                    right = first ? point.x() : std::max(right, point.x());
+                    top = std::min(top, point.y());
+                    bottom = std::max(bottom, point.y());
+                    first = false;
+                };
+
+                // Letra gravada pelo professor: os traços do gesto, na ordem em que foram escritos.
+                // Espaço do glifo: 1 = altura da maiúscula, linha de base em y = 0, x = 0 na borda.
+                if (const handwriting::GlyphVariant *variant = recorded(atom.character, glyphIndex)) {
+                    double fit = 1.0, lift = 0.0;
+                    fitRecorded(atom.character, *variant, &fit, &lift);
+                    const std::size_t begin = block->strokes.size();
+                    for (const handwriting::Stroke &stroke : variant->strokes) {
+                        Polyline placed;
+                        placed.reserve(stroke.points.size() + 1);
+                        for (const handwriting::WritingPoint &p : stroke.points) {
+                            placed.emplace_back(pen + p.pos.x() * fit * effective,
+                                                baseline + (p.pos.y() * fit + lift) * effective + shift);
+                            extend(placed.back());
+                        }
+                        // Um toque só (o pingo do i) vira um traço mínimo, que a mão consegue desenhar
+                        if (placed.size() == 1)
+                            placed.push_back(placed.front() + QPointF(0.05 * effective, 0.0));
+                        if (!placed.empty())
+                            block->strokes.push_back(std::move(placed));
+                    }
+                    if (block->strokes.size() > begin) {
+                        GlyphRun run{atom.character, rawPrevious, glyphIndex, line, begin,
+                                     block->strokes.size() - begin, QPointF(pen, baseline),
+                                     effective / m_font.capHeight()};
+                        run.recorded = true;
+                        block->runs.push_back(run);
+                    }
+                    pen += (variant->metrics.bounds.width() * fit + m_params.handwritingSpacing) * effective;
+                    kernPrevious = QChar();   // os pares de kerning são da fonte
+                    rawPrevious = atom.character;
+                    previous = atom.character;
+                    ++glyphIndex;
+                    continue;
+                }
+
                 const HersheyGlyph *glyph = m_font.glyph(atom.character);
                 if (!glyph) {
                     if (!atom.character.isSpace() && !block->missing.contains(atom.character))
@@ -130,12 +246,7 @@ QRectF TextLayout::emitLine(const std::vector<Group> &groups, double size, doubl
                     rawPrevious = atom.character;
                     continue;
                 }
-                const double effective = atom.script == Script::Normal ? groupSize
-                                                                       : groupSize * m_params.scriptScale;
                 const double scale = effective / m_font.capHeight();
-                const double shift = atom.script == Script::Superscript ? -m_params.superscriptRise * groupSize
-                                   : atom.script == Script::Subscript  ? m_params.subscriptDrop * groupSize
-                                                                       : 0.0;
                 pen += kerning(kernPrevious, atom.character) * scale;
 
                 const std::size_t begin = block->strokes.size();
@@ -146,11 +257,7 @@ QRectF TextLayout::emitLine(const std::vector<Group> &groups, double size, doubl
                         const QPointF point(pen + (p.x() - glyph->left) * scale,
                                             (p.y() - m_font.baseline()) * scale + shift + baseline);
                         placed.push_back(point);
-                        left = first ? point.x() : std::min(left, point.x());
-                        right = first ? point.x() : std::max(right, point.x());
-                        top = std::min(top, point.y());
-                        bottom = std::max(bottom, point.y());
-                        first = false;
+                        extend(point);
                     }
                     block->strokes.push_back(std::move(placed));
                 }

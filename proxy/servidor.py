@@ -5,6 +5,16 @@ mensagens do aplicativo, chama a IA em modo streaming usando
 docs/ia-protocol.md como system prompt e repassa ao aplicativo APENAS o texto
 gerado, em pedaços (chunked transfer). A chave nunca sai daqui.
 
+Economia de tokens:
+- só a parte de docs/ia-protocol.md antes do marcador "FIM DO PROMPT DA IA"
+  vai para a IA (o resto documenta comandos internos);
+- o system prompt vai marcado para cache de prompt onde o provedor pede isso
+  (Anthropic e modelos anthropic/ e google/ no OpenRouter; os demais fazem
+  cache automático);
+- a primeira pergunta de uma conversa é guardada com a aula respondida
+  (cache_aulas/): a mesma pergunta, com o mesmo modelo e o mesmo protocolo,
+  devolve a aula guardada sem chamar a IA. LOUSA_CACHE=0 desliga.
+
 Qual IA responde é escolha do proxy (LOUSA_PROVEDOR); o aplicativo não muda:
 
     anthropic   API da Anthropic (paga)          ANTHROPIC_API_KEY
@@ -19,10 +29,13 @@ Como rodar:
 """
 
 import asyncio
+import hashlib
 import json
 import os
+import re
 import sys
 import time
+import unicodedata
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -49,8 +62,13 @@ def carregar_env(caminho: Path) -> None:
 
 carregar_env(PASTA / ".env")
 
-# O protocolo do projeto é o system prompt da professora
+# O protocolo do projeto é o system prompt da professora; o que vem depois do
+# marcador é referência interna e não vai para a IA
 PROTOCOLO = PASTA.parent / "docs" / "ia-protocol.md"
+MARCADOR_FIM_DO_PROMPT = "<!-- FIM DO PROMPT DA IA"
+# Aulas reaproveitadas: a primeira pergunta de uma conversa e a resposta completa
+CACHE_ATIVO = os.environ.get("LOUSA_CACHE", "1") != "0"
+PASTA_CACHE = Path(os.environ.get("LOUSA_CACHE_DIR", PASTA / "cache_aulas"))
 MAX_TOKENS = int(os.environ.get("LOUSA_MAX_TOKENS", "4000"))
 TEMPO_LIMITE = float(os.environ.get("LOUSA_TEMPO_LIMITE", "300"))
 # Quanto tempo o modelo pode ficar sem escrever NEM pensar antes de o proxy
@@ -82,8 +100,16 @@ class Pedido(BaseModel):
     mensagens: list[Mensagem]
 
 
+def ler_prompt(caminho: Path) -> str:
+    """O system prompt: o protocolo até o marcador de fim (o arquivo inteiro se não houver)."""
+    texto = caminho.read_text(encoding="utf-8")
+    return texto.split(MARCADOR_FIM_DO_PROMPT, 1)[0].rstrip() + "\n"
+
+
 app = FastAPI(title="Lousa Inteligente - proxy")
-sistema = PROTOCOLO.read_text(encoding="utf-8")
+sistema = ler_prompt(PROTOCOLO)
+# Muda quando o protocolo muda: aulas guardadas com outro protocolo não valem mais
+VERSAO_PROTOCOLO = hashlib.sha256(sistema.encode("utf-8")).hexdigest()[:16]
 anthropic_cliente = anthropic.AsyncAnthropic() if PROVEDOR == "anthropic" and CHAVE else None
 http = httpx.AsyncClient(timeout=httpx.Timeout(30.0, read=TEMPO_LIMITE))
 
@@ -103,10 +129,20 @@ def conferir_configuracao() -> None:
         raise HTTPException(status_code=500, detail="defina LOUSA_URL com o endpoint /v1/chat/completions")
 
 
+def registrar_uso(entrada: int, cache: int, saida: int, raciocinio: int = 0) -> None:
+    """Tokens de cada resposta no terminal do proxy (mostra se o cache de prompt pegou)."""
+    extra = f" (raciocínio {raciocinio})" if raciocinio else ""
+    print(f"uso: entrada {entrada} (do cache {cache}) · saída {saida}{extra}", file=sys.stderr, flush=True)
+
+
 async def abrir_anthropic(mensagens: list[dict]) -> AsyncIterator[str]:
-    """Streaming pela biblioteca oficial da Anthropic."""
+    """Streaming pela biblioteca oficial da Anthropic, com o protocolo em cache de prompt."""
     gerente = anthropic_cliente.messages.stream(
-        model=MODELO, max_tokens=MAX_TOKENS, system=sistema, messages=mensagens
+        model=MODELO,
+        max_tokens=MAX_TOKENS,
+        # O protocolo é igual em toda pergunta: a partir da segunda ele vem do cache
+        system=[{"type": "text", "text": sistema, "cache_control": {"type": "ephemeral"}}],
+        messages=mensagens,
     )
     fluxo = await gerente.__aenter__()  # a conexão abre aqui: erros viram HTTP, não fluxo vazio
 
@@ -114,8 +150,13 @@ async def abrir_anthropic(mensagens: list[dict]) -> AsyncIterator[str]:
         try:
             async for texto in fluxo.text_stream:
                 yield texto
-        except Exception as erro:  # noqa: BLE001 - o cabeçalho já foi enviado; só dá para registrar
+            final = await fluxo.get_final_message()
+            uso = final.usage
+            registrar_uso(uso.input_tokens + (uso.cache_read_input_tokens or 0) + (uso.cache_creation_input_tokens or 0),
+                          uso.cache_read_input_tokens or 0, uso.output_tokens)
+        except Exception as erro:  # noqa: BLE001 - o cabeçalho já foi enviado: o erro vai no fluxo
             print(f"erro no meio da resposta: {erro}", file=sys.stderr, flush=True)
+            yield "\n" + linha_de_erro(f"o modelo {MODELO} falhou: {type(erro).__name__}: {erro}")
         finally:
             await gerente.__aexit__(None, None, None)
 
@@ -123,7 +164,7 @@ async def abrir_anthropic(mensagens: list[dict]) -> AsyncIterator[str]:
 
 
 def ler_evento_sse(linha: str) -> tuple[str, str] | None:
-    """Uma linha SSE no formato OpenAI → ("texto" | "pensando" | "erro" | "fim", valor) ou None.
+    """Uma linha SSE no formato OpenAI → ("texto" | "pensando" | "uso" | "erro" | "fim", valor) ou None.
 
     Comentários (": OPENROUTER PROCESSING") e pedaços vazios viram None. O
     raciocínio dos modelos que "pensam" antes de escrever vira "pensando": não
@@ -147,6 +188,8 @@ def ler_evento_sse(linha: str) -> tuple[str, str] | None:
         return ("texto", texto)
     if delta.get("reasoning") or delta.get("reasoning_content") or delta.get("reasoning_details"):
         return ("pensando", "")
+    if uso := objeto.get("usage"):
+        return ("uso", json.dumps(uso))
     return None
 
 
@@ -186,13 +229,19 @@ async def abrir_openai(mensagens: list[dict]) -> AsyncIterator[str]:
     cabecalhos = {"Content-Type": "application/json", "X-Title": "Lousa Inteligente"}
     if CHAVE:
         cabecalhos["Authorization"] = f"Bearer {CHAVE}"
+    # O protocolo vai como mensagem de sistema. Modelos da Anthropic e do Google
+    # só usam cache de prompt com a marcação explícita; os demais fazem sozinhos.
+    conteudo_sistema: str | list[dict] = sistema
+    if PROVEDOR == "openrouter" and MODELO.startswith(("anthropic/", "google/")):
+        conteudo_sistema = [{"type": "text", "text": sistema, "cache_control": {"type": "ephemeral"}}]
     corpo = {
         "model": MODELO,
         "max_tokens": MAX_TOKENS,
         "stream": True,
-        # O protocolo vai como mensagem de sistema, igual ao caminho da Anthropic
-        "messages": [{"role": "system", "content": sistema}] + mensagens,
+        "messages": [{"role": "system", "content": conteudo_sistema}] + mensagens,
     }
+    if PROVEDOR == "openrouter":
+        corpo["usage"] = {"include": True}  # tokens (e quanto veio do cache) no fim do fluxo
 
     contexto = http.stream("POST", URL, headers=cabecalhos, json=corpo)
     resposta = await contexto.__aenter__()
@@ -205,6 +254,8 @@ async def abrir_openai(mensagens: list[dict]) -> AsyncIterator[str]:
     dica = "Tente de novo ou troque LOUSA_MODELO."
     try:
         primeiro = await eventos.__anext__()
+        while primeiro[0] == "uso":
+            primeiro = await eventos.__anext__()
     except (asyncio.TimeoutError, StopAsyncIteration, httpx.HTTPError) as erro:
         await contexto.__aexit__(None, None, None)
         if isinstance(erro, asyncio.TimeoutError):
@@ -247,6 +298,12 @@ async def abrir_openai(mensagens: list[dict]) -> AsyncIterator[str]:
                     if not meio_de_linha and agora - ultimo_envio >= SINAL_DE_VIDA:
                         ultimo_envio = agora
                         yield "\n"
+                elif tipo == "uso":
+                    uso = json.loads(valor)
+                    detalhes = uso.get("prompt_tokens_details") or {}
+                    registrar_uso(uso.get("prompt_tokens", 0), detalhes.get("cached_tokens", 0),
+                                  uso.get("completion_tokens", 0),
+                                  (uso.get("completion_tokens_details") or {}).get("reasoning_tokens", 0))
                 elif tipo == "erro":
                     falhou = True
                     yield erro_no_fluxo(f"falhou: {valor}")
@@ -265,6 +322,59 @@ async def abrir_openai(mensagens: list[dict]) -> AsyncIterator[str]:
     return gerar()
 
 
+def normalizar_pergunta(texto: str) -> str:
+    """"O que é um Triângulo?" e "o que e um triangulo" viram a mesma chave."""
+    sem_acento = "".join(c for c in unicodedata.normalize("NFKD", texto.casefold())
+                         if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^\w]+", " ", sem_acento).split())
+
+
+def chave_do_cache(mensagens: list[Mensagem]) -> str | None:
+    """Só a primeira pergunta de uma conversa entra no cache: as seguintes dependem do histórico."""
+    if not CACHE_ATIVO or len(mensagens) != 1 or mensagens[0].papel != "usuario":
+        return None
+    pergunta = normalizar_pergunta(mensagens[0].texto)
+    if not pergunta:
+        return None
+    identidade = json.dumps([pergunta, PROVEDOR, MODELO, VERSAO_PROTOCOLO], ensure_ascii=False)
+    return hashlib.sha256(identidade.encode("utf-8")).hexdigest()
+
+
+def ler_cache(chave: str) -> str | None:
+    try:
+        return json.loads((PASTA_CACHE / f"{chave}.json").read_text(encoding="utf-8"))["aula"]
+    except (OSError, ValueError, KeyError):
+        return None
+
+
+def gravar_cache(chave: str, pergunta: str, aula: str) -> None:
+    """Grava inteiro ou não grava (arquivo temporário + rename)."""
+    try:
+        PASTA_CACHE.mkdir(parents=True, exist_ok=True)
+        destino = PASTA_CACHE / f"{chave}.json"
+        temporario = destino.with_suffix(".tmp")
+        temporario.write_text(json.dumps({"pergunta": pergunta, "provedor": PROVEDOR, "modelo": MODELO,
+                                          "protocolo": VERSAO_PROTOCOLO, "criada": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                                          "aula": aula}, ensure_ascii=False, indent=1), encoding="utf-8")
+        temporario.replace(destino)
+    except OSError as erro:
+        print(f"cache de aulas: não foi possível gravar: {erro}", file=sys.stderr, flush=True)
+
+
+async def guardando(fluxo: AsyncIterator[str], chave: str, pergunta: str) -> AsyncIterator[str]:
+    """Repassa o fluxo e, se ele terminou inteiro e sem erro, guarda a aula."""
+    partes: list[str] = []
+    async for parte in fluxo:
+        partes.append(parte)
+        yield parte
+    # Chegou aqui: o fluxo terminou (o app desconectar interrompe antes, e nada é gravado)
+    aula = "".join(partes)
+    falhou = any(json.loads(linha).get("tipo") == "erro"
+                 for linha in aula.splitlines() if linha.startswith('{"tipo": "erro"'))
+    if not falhou and aula.strip():
+        gravar_cache(chave, pergunta, aula)
+
+
 @app.get("/saude")
 def saude():
     """Confere a configuração sem gastar tokens."""
@@ -273,7 +383,8 @@ def saude():
         "modelo": MODELO,
         "chave": bool(CHAVE),
         "url": URL or "(biblioteca da Anthropic)",
-        "protocolo_bytes": len(sistema),
+        "protocolo_bytes": len(sistema.encode("utf-8")),
+        "cache_aulas": len(list(PASTA_CACHE.glob("*.json"))) if CACHE_ATIVO and PASTA_CACHE.exists() else None,
     }
 
 
@@ -282,6 +393,13 @@ async def aula(pedido: Pedido):
     conferir_configuracao()
     if not pedido.mensagens:
         raise HTTPException(status_code=400, detail="nenhuma mensagem enviada")
+
+    # Aula já respondida antes: devolve na hora, sem gastar tokens
+    chave = chave_do_cache(pedido.mensagens)
+    if chave and (guardada := ler_cache(chave)) is not None:
+        print(f"aula reaproveitada: {pedido.mensagens[0].texto!r}", file=sys.stderr, flush=True)
+        return StreamingResponse(iter([guardada]), media_type="text/plain; charset=utf-8",
+                                 headers={"X-Lousa-Cache": "reaproveitada"})
 
     mensagens = [
         {"role": "assistant" if m.papel == "professor" else "user", "content": m.texto}
@@ -301,5 +419,7 @@ async def aula(pedido: Pedido):
     except Exception as erro:  # noqa: BLE001 - rede fora do ar, modelo inválido etc.
         raise HTTPException(status_code=502, detail=f"{type(erro).__name__}: {erro}") from erro
 
+    if chave:
+        fluxo = guardando(fluxo, chave, pedido.mensagens[0].texto)
     # text/plain em pedaços: o aplicativo desenha assim que a primeira linha chega
     return StreamingResponse(fluxo, media_type="text/plain; charset=utf-8")

@@ -34,8 +34,8 @@ public:
     explicit Scene(VirtualHand &hand, const SceneParams &params = SceneParams(), QObject *parent = nullptr);
 
     // Executa "forma", "escrever", "conectar", "destacar", "objeto_3d",
-    // "rotular", "cotar", "traco_livre", "linha", "coluna", "nova_tela",
-    // "apagar" ou "limpar"
+    // "rotular", "cotar", "grafico", "tabela", "traco_livre", "linha",
+    // "coluna", "nova_tela", "apagar" ou "limpar"
     void execute(const QJsonObject &command);
 
     // Esquece todos os elementos e interrompe o desenho em andamento
@@ -45,6 +45,11 @@ public:
 
     // Humanização da escrita (vale a partir do próximo texto)
     void setHumanizerParams(const HumanizerParams &params) { m_humanizer.setParams(params); }
+    // Escrita com as letras gravadas pelo professor (nullptr = só a fonte)
+    void setHandwriting(const handwriting::GlyphDatabase *database)
+    {
+        m_textLayout.setHandwriting(database, m_humanizer.params().seed);
+    }
     const HumanizerParams &humanizerParams() const { return m_humanizer.params(); }
     const std::vector<SceneElement> &elements() const { return m_elements; }
     QRectF usableArea() const { return m_layout.usableArea(); }
@@ -73,6 +78,16 @@ private:
     void drawObject(const QJsonObject &command);
     void labelVertex(const QJsonObject &command);
     void dimensionEdge(const QJsonObject &command);
+    // Comandos de alto nível: a IA manda uma linha e o motor monta eixos,
+    // marcações, curvas, grade e textos como um único elemento
+    void drawChart(const QJsonObject &command);
+    void drawTable(const QJsonObject &command);
+    // Texto pronto para compor um elemento maior: centralizado em `center`
+    // (ou com a borda esquerda/direita lá, conforme `align` −1, 0, 1)
+    std::vector<HandStroke> label(const QString &text, double size, PressureLevel pressure, const QPointF &at,
+                                  int alignX, int alignY) const;
+    // Posiciona, registra e desenha um elemento composto de vários traços
+    void placeComposite(const QJsonObject &command, std::vector<HandStroke> strokes, const QString &label);
     void flowCommand(const QJsonObject &command);
     void eraseElement(const QJsonObject &command);
     void clearAll();

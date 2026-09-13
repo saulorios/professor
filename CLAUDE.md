@@ -159,8 +159,9 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   de ser desenhado. `fala` não bloqueia; `pausa` respeita a velocidade.
 - Comandos implementados: `forma` (circulo, elipse, retangulo, triangulo, poligono,
   linha, seta, arco), `escrever`, `conectar`, `destacar`, `objeto_3d`, `rotular`,
-  `cotar`, `traco_livre`, `linha`, `coluna`, `nova_tela`, `pausa`, `fala`,
-  `fim_passo`, `apagar`, `limpar`. Os demais geram aviso e são pulados.
+  `cotar`, `grafico`, `tabela`, `traco_livre`, `linha`, `coluna`, `nova_tela`,
+  `pausa`, `fala`, `fim_passo`, `apagar`, `limpar`. Os demais geram aviso e são
+  pulados.
 - `scene/Scene`: guarda todos os elementos desenhados (com ou sem id) com a
   bounding box e o ponto de referência; `conectar` liga as bordas dos elementos
   (elipse inscrita na bounding box para círculos/elipses, a própria caixa para os
@@ -186,7 +187,8 @@ Fluxo: arquivo → `CommandParser` → `CommandQueue` → `Scene` → `VirtualHa
   e `nova_tela`), `examples/estresse.jsonl` (60 comandos sem posicionamento
   nenhum: é o teste da regra de não sobrepor),
   `examples/cubo.jsonl` e `examples/casa.jsonl` (Exemplos 2 e 3) e
-  `examples/solidos.jsonl` (os seis sólidos em cada uma das quatro vistas).
+  `examples/solidos.jsonl` (os seis sólidos em cada uma das quatro vistas),
+  `examples/graficos.jsonl` (parábola com pontos e tabela, assíntotas, seno e raiz).
 
 ## Motor de layout (`scene/Layout`)
 
@@ -354,7 +356,9 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
 
 - `proxy/servidor.py` (FastAPI + uvicorn, fora do app): `POST /aula` recebe
   `{"mensagens":[{"papel":"usuario|professor","texto":"..."}]}`, chama a IA em
-  modo streaming usando `docs/ia-protocol.md` como system prompt e devolve
+  modo streaming usando `docs/ia-protocol.md` **até o marcador
+  `<!-- FIM DO PROMPT DA IA`** como system prompt (o resto do arquivo documenta
+  comandos internos e não gasta tokens) e devolve
   **apenas o texto gerado**, em `text/plain` chunked. A chave vem do ambiente
   ou de um `.env` na pasta `proxy/` (fora do git) e **nunca** entra no app C++.
   `GET /saude` confere a configuração sem gastar tokens. Erros da API viram 502
@@ -369,6 +373,18 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
   `choices[0].delta.content`. Sem `LOUSA_PROVEDOR`, vale `openrouter` se houver
   `OPENROUTER_API_KEY`, senão `anthropic`. Outras variáveis: `LOUSA_MODELO`
   (obrigatória fora da Anthropic), `LOUSA_MAX_TOKENS`, `LOUSA_TEMPO_LIMITE`.
+- **Economia de tokens no proxy.** (1) Cache de prompt: o protocolo vai com
+  `cache_control` no caminho da Anthropic e nos modelos `anthropic/` e `google/`
+  do OpenRouter (os demais fazem cache automático); o terminal do proxy registra
+  "uso: entrada N (do cache M) · saída K". (2) Cache de aulas: a PRIMEIRA
+  pergunta de uma conversa, normalizada (sem acento, maiúsculas e pontuação),
+  mais provedor, modelo e hash do protocolo, vira chave de um arquivo em
+  `proxy/cache_aulas/` (fora do git) com a resposta completa; respostas com erro
+  ou interrompidas não entram. A mesma pergunta devolve a aula na hora, com o
+  cabeçalho `X-Lousa-Cache: reaproveitada`; `AiClient::finished(bool reused)` e
+  o painel avisam "nenhum token gasto". Mudar o protocolo ou o modelo invalida
+  sozinho. `LOUSA_CACHE=0` desliga, `LOUSA_CACHE_DIR` muda a pasta.
+  Testes sem rede: `cd proxy && .venv/bin/python -m unittest testes`.
 - Modelos que "pensam" antes de escrever (raciocínio no `delta.reasoning`) e
   provedores gratuitos sobrecarregados: a resposta HTTP do proxy só começa
   quando o modelo dá sinal de trabalho (texto ou raciocínio). Erro do provedor
@@ -420,6 +436,36 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
 - `LessonPlayer` ganhou o modo streaming (`startStream`/`appendStreamData`/
   `finishStream`): cada comando vai para a fila assim que a linha chega, e
   "Reiniciar" redesenha o que já veio.
+
+## Comandos de alto nível (`grafico`, `tabela`)
+
+A IA manda UMA linha e o motor monta o resto: menos tokens e contas certas
+(a IA não precisa calcular pontos de curva nem medir texto).
+
+- `scene/Expression`: expressão em x lida uma vez para um programa em notação
+  polonesa reversa e avaliada sem alocação. `+ − * / ^` (e `· × ÷ −`), menos
+  unário (potência antes: `-x^2 = −(x²)`), multiplicação implícita (`2x`,
+  `3(x+1)`, `2sen(x)`), `²`/`³`, `pi`/`π`, `e`, funções `sin sen cos tan tg asin
+  acos atan sqrt √ abs exp ln log log2 floor ceil`. NaN fora do domínio.
+- `scene/ChartGeometry` (namespace `chart`): `niceStep` (passo 1/2/5 × 10ⁿ),
+  `ticks`, `autoRange` (ignora os 3% extremos, inclui o zero se estiver perto,
+  folga de 8%), `sample` (curva em trechos: quebra em NaN e em saltos maiores
+  que `chartJump` da altura, corta exatamente na borda de y) e `format`
+  (vírgula decimal).
+- `grafico`: `expressao` ou `funcoes` (até 4, com `rotulo` e `estilo`), `x`, `y`
+  opcional, `largura`, `altura`, `rotulo_x`, `rotulo_y`, `marcas`, `pontos`
+  (`[x,y]` ou `{"x","y","rotulo"}`). Ordem do desenho: eixos com setas (passam
+  pelo zero ou pela borda), marcações e números (densidade por
+  `chartTickSpacing`; o zero do cruzamento fica sem número), nomes dos eixos
+  depois das setas, curvas com o rótulo no fim, pontos. Rótulos de curvas e
+  pontos sobem até não colidir entre si.
+- `tabela`: `linhas` (texto ou número por célula), `cabecalho` (padrão true,
+  linha dupla), `tamanho`. Colunas pela célula mais larga, linhas pela mais
+  alta, texto centralizado; grade primeiro, depois o texto linha a linha.
+- Os dois são UM elemento cada (`Scene::placeComposite`): passam pelo layout
+  como caixa rígida, o cinto de segurança reduz se não couber e as partes
+  internas não colidem entre si. Constantes em `SceneParams` (blocos
+  "Gráficos" e "Tabelas").
 
 ## Objetos 3D (`objeto_3d`, `rotular`, `cotar`)
 
@@ -513,7 +559,28 @@ pulso, IK e variação **não** existem ainda. O Hershey continua sendo a fonte 
   detalhes com caixa, timestamps, ordem e pen up/down. Enquanto a janela está
   aberta a compressão de eventos do mouse fica desligada. Banco em
   `<pasta do executável>/handwriting` ou `LOUSA_ESCRITA`.
-- Testes: `tests/handwriting/tst_handwriting.cpp` (QtTest), `ctest --test-dir build`.
+- **A lousa escreve com as letras gravadas** (View > "Escrever com a minha
+  letra", padrão ligado). A `MainWindow` carrega o banco ao abrir e recarrega
+  quando o gravador salva ou exclui (`HandwritingRecorder::databaseChanged`);
+  `LessonPlayer::setHandwriting` → `Scene` → `TextLayout::setHandwriting`. Vale
+  para a fonte normal (texto, rótulos, cotas, gráficos, tabelas), não para a
+  cursiva, e não custa token: a IA não sabe de nada.
+  - Por caractere: com variante gravada, usa os traços dela; sem, a fonte
+    Hershey. A variante é escolhida por hash (caractere, posição na frase,
+    seed da aula): o mesmo texto sai igual e letras repetidas variam.
+  - `TextLayout::fitRecorded`: escala uniforme e deslocamento vertical que dão
+    à variante a altura e a base da mesma letra na fonte ("A" na altura da
+    maiúscula, "a" na das minúsculas, "g" descendo), limitados por
+    `handwritingMinScale`/`MaxScale`; corrige capturas que flutuam acima da
+    guia. A proporção e o traço ficam intactos; o arquivo não muda.
+    `handwritingNormalize` desliga. Espaço entre letras: `handwritingSpacing`.
+  - `GlyphRun::recorded`: o `Humanizer` não deforma a forma (curvatura, quinas,
+    fecho, extrapolação) dessas letras; mantém escala, rotação, linha de base e
+    ritmo. Toque único (pingo) vira traço mínimo para a mão.
+  - Limitação: a mão ainda usa o próprio perfil de velocidade, não o tempo
+    gravado (isso é da etapa 2).
+- Testes: `tests/handwriting/tst_handwriting.cpp` e `tests/scene/tst_scene.cpp`
+  (expressões, gráficos, escrita com o banco), `ctest --test-dir build`.
 
 ## Paleta
 
@@ -542,7 +609,8 @@ cmake --build build -j
 ```
 
 Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
-Os testes (se o Qt6::Test estiver instalado) rodam com `ctest --test-dir build`.
+Os testes (se o Qt6::Test estiver instalado) rodam com `ctest --test-dir build`;
+os do proxy, sem rede, com `cd proxy && .venv/bin/python -m unittest testes`.
 
 Para a aula com IA, o proxy precisa estar instalado (a chave fica só nele). A
 lousa o inicia sozinha ao abrir e o encerra ao fechar; rodá-lo à mão continua
@@ -557,9 +625,10 @@ cp .env.exemplo .env    # provedor, chave e modelo (ou exporte no terminal)
 
 ## Arquivos de referência
 
-- `docs/ia-protocol.md` — system prompt da IA professora e especificação completa
-  dos comandos JSON Lines. É a fonte da verdade do protocolo: o parser deve
-  aceitar exatamente o que está descrito lá.
+- `docs/ia-protocol.md` — system prompt da IA professora (até o marcador
+  `<!-- FIM DO PROMPT DA IA`) e, depois dele, a referência dos comandos internos.
+  É a fonte da verdade do protocolo: o parser deve aceitar exatamente o que está
+  descrito lá. Mantenha a parte da IA enxuta: cada byte vai em toda pergunta.
 - `examples/*.jsonl` — aulas escritas à mão para testar o motor sem usar a IA.
 - `docs/handwriting-format.md` — formato do banco de escrita manual.
 
@@ -574,4 +643,7 @@ cp .env.exemplo .env    # provedor, chave e modelo (ou exporte no terminal)
 - [x] Etapa 6 — Cliente de rede e IA
 - [ ] Etapa 7 — Renderização em OpenGL (opcional)
 - [x] Escrita manual 1 — Banco de gestos, gravador (F7) e contrato da WritingTrajectory
+- [x] Economia de tokens — protocolo enxuto, cache de prompt e cache de aulas
+- [x] Comandos de alto nível — `grafico` e `tabela`
+- [x] Escrita com as letras gravadas (normalizadas, com fallback na fonte)
 - [ ] Escrita manual 2 — HandwritingEngine com variação + HumanMotionEngine

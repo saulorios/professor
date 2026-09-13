@@ -53,6 +53,7 @@ public:
 
     // Humanização da escrita (vale a partir do próximo texto)
     void setHumanizerParams(const HumanizerParams &params) { m_scene.setHumanizerParams(params); }
+    void setHandwriting(const handwriting::GlyphDatabase *database) { m_scene.setHandwriting(database); }
     const HumanizerParams &humanizerParams() const { return m_scene.humanizerParams(); }
 
     // Cena da aula (elementos desenhados, área útil), para o modo de depuração

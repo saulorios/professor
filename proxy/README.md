@@ -78,6 +78,28 @@ Para rodar à mão:
 Confira com `curl http://127.0.0.1:8000/saude`: ele mostra o provedor, o modelo
 e se a chave foi encontrada.
 
+## Economia de tokens
+
+- **Só o necessário vai para a IA:** o proxy envia `docs/ia-protocol.md` até o
+  marcador `<!-- FIM DO PROMPT DA IA`; o resto do arquivo é referência interna.
+- **Cache de prompt:** o protocolo, igual em toda pergunta, vai marcado para
+  cache na API da Anthropic e nos modelos `anthropic/` e `google/` do
+  OpenRouter (os demais fazem cache sozinhos). O terminal mostra, a cada
+  resposta, `uso: entrada N (do cache M) · saída K`.
+- **Aulas reaproveitadas:** a primeira pergunta de uma conversa é guardada com a
+  aula completa em `cache_aulas/`. A mesma pergunta — sem diferença de acento,
+  maiúsculas ou pontuação — com o mesmo modelo e o mesmo protocolo volta na
+  hora, sem chamar a IA, e o painel do professor avisa. Perguntas de
+  acompanhamento e respostas com erro não entram. Trocar o modelo ou editar o
+  protocolo invalida o cache sozinho; para limpar, apague a pasta.
+  `LOUSA_CACHE=0` desliga e `LOUSA_CACHE_DIR` escolhe outra pasta.
+
+Testes (sem rede, sem gastar tokens):
+
+```bash
+.venv/bin/python -m unittest testes -v
+```
+
 ## Quando a IA não responde
 
 Os modelos gratuitos às vezes ficam sobrecarregados: o OpenRouter aceita o

@@ -2,6 +2,7 @@
 
 #include "LessonPlayer.h"
 #include "LessonRecorder.h"
+#include "handwriting/data/GlyphDatabase.h"
 #include "physics/Board.h"
 #include "protocol/AiClient.h"
 #include "protocol/ProxyLauncher.h"
@@ -54,6 +55,8 @@ private:
 
     // Aula vinda da IA (pelo proxy) e log dos comandos recebidos
     void askAi(const QString &question);
+    // Letras gravadas no banco de escrita manual: recarrega e aplica à escrita
+    void reloadHandwriting();
     void logLine(const QString &text);
 
     // Modo de depuração (F12): bounding boxes e ids dos elementos da cena
@@ -82,6 +85,8 @@ private:
     QPlainTextEdit *m_log = nullptr;
     LessonEditor *m_editor = nullptr;
     HandwritingRecorder *m_handwriting = nullptr;
+    handwriting::GlyphDatabase m_glyphs;     // banco usado pela escrita da lousa
+    QAction *m_useHandwriting = nullptr;
     QAction *m_showChalk = nullptr;
     QAction *m_record = nullptr;
     QAction *m_showPanel = nullptr;

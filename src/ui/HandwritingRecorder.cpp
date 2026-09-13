@@ -194,6 +194,7 @@ void HandwritingRecorder::reloadDatabase()
     else
         m_status->setText(QString("Banco: %1 · %2 variante(s)").arg(m_database.root()).arg(m_database.variantCount()));
     refreshVariants();
+    emit databaseChanged();
 }
 
 void HandwritingRecorder::refreshVariants()
@@ -248,6 +249,7 @@ void HandwritingRecorder::deleteSelectedVariant()
     m_status->setText(QString("%1 excluída").arg(id));
     m_capture->clear();
     refreshVariants();
+    emit databaseChanged();
 }
 
 void HandwritingRecorder::updateButtons()
@@ -297,6 +299,7 @@ void HandwritingRecorder::saveVariant()
     m_status->setText(QString("%1 salva em %2").arg(id, m_database.variantPath(character, id)));
     m_capture->clear();
     refreshVariants();
+    emit databaseChanged();
 }
 
 QString HandwritingRecorder::describe(const GlyphVariant &v) const

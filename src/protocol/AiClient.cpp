@@ -118,7 +118,7 @@ void AiClient::replyFinished()
 
     const QNetworkReply::NetworkError error = reply->error();
     if (m_aborted || error == QNetworkReply::NoError) {
-        emit finished();
+        emit finished(reply->rawHeader("X-Lousa-Cache") == "reaproveitada");
         return;
     }
 

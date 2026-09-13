@@ -1,0 +1,15 @@
+{"tipo":"escrever","id":"titulo","texto":"Função quadrática","tamanho":6}
+{"tipo":"fala","texto":"Vamos ver o gráfico de f(x) = x² − 2x − 3."}
+{"tipo":"coluna","qual":"esquerda"}
+{"tipo":"grafico","id":"parabola","expressao":"x^2 - 2x - 3","x":[-3,5],"largura":55,"altura":40,"rotulo":"f(x)","pontos":[{"x":-1,"y":0,"rotulo":"A"},{"x":3,"y":0,"rotulo":"B"},{"x":1,"y":-4,"rotulo":"V"}]}
+{"tipo":"fala","texto":"As raízes são −1 e 3, e o vértice fica em (1, −4)."}
+{"tipo":"coluna","qual":"direita"}
+{"tipo":"tabela","id":"valores","linhas":[["x","f(x)"],[-1,0],[0,-3],[1,-4],[2,-3],[3,0]]}
+{"tipo":"nova_tela"}
+{"tipo":"coluna","qual":"unica"}
+{"tipo":"escrever","texto":"Funções com assíntotas","tamanho":6}
+{"tipo":"grafico","funcoes":[{"expressao":"1/x","rotulo":"1/x"},{"expressao":"tan(x)","rotulo":"tg x","estilo":"tracejado"}],"x":[-4,4],"y":[-4,4],"largura":80,"altura":40}
+{"tipo":"coluna","qual":"esquerda"}
+{"tipo":"grafico","expressao":"sen(x)","x":[-6.28,6.28],"largura":60,"altura":24,"rotulo_y":"sen x"}
+{"tipo":"coluna","qual":"direita"}
+{"tipo":"grafico","expressao":"sqrt(x)","x":[-1,9],"largura":50,"altura":24}

@@ -4,6 +4,8 @@
 #include "SceneParams.h"
 #include "hand/Polyline.h"
 
+#include <cstdint>
+
 #include <QPointF>
 #include <QRectF>
 #include <QString>
@@ -22,6 +24,7 @@ struct GlyphRun {
     std::size_t count = 0; // quantos traços
     QPointF origin;        // caneta e linha de base do glifo
     double scale = 1.0;    // unidades da lousa por unidade da fonte
+    bool recorded = false; // veio do banco de escrita manual (não da fonte)
 };
 
 // Um texto já quebrado em linhas
@@ -42,10 +45,21 @@ struct TextBlock {
 // espaço entre palavras, depois um operador (que é repetido no início da linha
 // seguinte, como se faz em matemática) e, em último caso, o hífen. Índices,
 // expoentes e grupos {…} nunca são partidos.
+namespace handwriting {
+class GlyphDatabase;
+struct GlyphVariant;
+} // namespace handwriting
+
 class TextLayout
 {
 public:
     TextLayout(const HersheyFont &font, const SceneParams &params);
+
+    // Letras gravadas pelo professor (banco de escrita manual) no lugar da fonte,
+    // onde houver variante; os demais caracteres continuam na fonte. nullptr
+    // desliga. `seed` escolhe as variantes: o mesmo texto sai sempre igual, e
+    // letras repetidas numa frase usam variantes diferentes.
+    void setHandwriting(const handwriting::GlyphDatabase *database, std::uint32_t seed);
 
     // Linha de base da primeira linha em y = 0, começando em x = 0.
     // `maxWidth` <= 0 desliga a quebra.
@@ -81,10 +95,19 @@ private:
     std::vector<Group> group(const std::vector<Unit> &units) const;
     double advance(QChar character, Script script, double size) const;
     double kerning(QChar left, QChar right) const;
+    // Variante gravada para esta ocorrência do caractere, ou nullptr
+    const handwriting::GlyphVariant *recorded(QChar character, int occurrence) const;
+    // Largura média das variantes gravadas (para medir antes de escolher), ou < 0
+    double recordedWidth(QChar character) const;
+    // Como encaixar a variante na linha: escala uniforme e deslocamento vertical
+    // (espaço do glifo) que dão a ela a altura e a linha de base da letra na fonte
+    void fitRecorded(QChar character, const handwriting::GlyphVariant &variant, double *scale, double *dy) const;
     // Coloca uma linha inteira e devolve a caixa dela
     QRectF emitLine(const std::vector<Group> &groups, double size, double baseline, int line,
                     int &glyphIndex, QChar &previous, TextBlock *block) const;
 
     const HersheyFont &m_font;
     SceneParams m_params;
+    const handwriting::GlyphDatabase *m_handwriting = nullptr;
+    std::uint32_t m_handwritingSeed = 0;
 };

@@ -184,8 +184,9 @@ std::vector<HandStroke> Humanizer::apply(const std::vector<Polyline> &strokes, c
         const QChar c = run.character;
         const int i = run.index;
 
-        // --- Forma dos traços ---
-        for (std::size_t s = run.first; s < run.first + run.count; ++s) {
+        // Letra gravada: o gesto já é humano. Só a variação por letra (tamanho,
+        // inclinação, linha de base) e o ritmo valem para ela; a forma fica intacta.
+        for (std::size_t s = run.first; s < run.first + run.count && !run.recorded; ++s) {
             Polyline &line = out[s].points;
             const bool closed = line.size() > 2 && length(line.back() - line.front()) <= kClosed;
             line = bow(line, m_params.bowing * k, m_params.minSegment, m_params.bowSegments, c,
@@ -197,7 +198,7 @@ std::vector<HandStroke> Humanizer::apply(const std::vector<Polyline> &strokes, c
 
         // --- Extrapolação: quem encosta em outro traço passa um pouco ---
         const double touching = 1.5 * run.scale; // ~1,5 unidade da fonte
-        for (std::size_t s = run.first; s < run.first + run.count; ++s) {
+        for (std::size_t s = run.first; s < run.first + run.count && !run.recorded; ++s) {
             Polyline &line = out[s].points;
             if (line.size() < 2 || length(line.back() - line.front()) <= kClosed)
                 continue;

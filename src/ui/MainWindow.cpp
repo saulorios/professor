@@ -53,8 +53,10 @@ MainWindow::MainWindow(QWidget *parent)
     // Gravador de escrita manual (F7): janela própria, criada na primeira vez
     m_titleBar->fileMenu()->addSeparator();
     m_titleBar->fileMenu()->addAction("Gravador de escrita manual...", this, [this] {
-        if (!m_handwriting)
+        if (!m_handwriting) {
             m_handwriting = new HandwritingRecorder(this);
+            connect(m_handwriting, &HandwritingRecorder::databaseChanged, this, &MainWindow::reloadHandwriting);
+        }
         m_handwriting->show();
         m_handwriting->raise();
         m_handwriting->activateWindow();
@@ -168,9 +170,13 @@ MainWindow::MainWindow(QWidget *parent)
         m_agent->setBusy(true);
     });
     connect(&m_ai, &AiClient::chunk, &m_player, &LessonPlayer::appendStreamData);
-    connect(&m_ai, &AiClient::finished, this, [this] {
+    connect(&m_ai, &AiClient::finished, this, [this](bool reused) {
         m_agent->setBusy(false);
-        if (!m_streamError.isEmpty()) {
+        if (reused && m_streamError.isEmpty()) {
+            m_agent->setStatus("Aula reaproveitada: mesma pergunta de antes, nenhum token gasto.");
+            logLine("[proxy] aula reaproveitada do cache");
+            m_agent->finishSegment(TimelineCard::State::Done);
+        } else if (!m_streamError.isEmpty()) {
             // A resposta começou, mas o modelo falhou no caminho (o motivo veio no fluxo)
             m_agent->setStatus(m_streamError);
             m_agent->finishSegment(TimelineCard::State::Failed);
@@ -260,6 +266,15 @@ MainWindow::MainWindow(QWidget *parent)
         m_tuningPanel->setValues(values);
         applyParams(values);
     });
+
+    // View: escrever com as letras gravadas no banco de escrita manual (F7).
+    // Onde não houver variante gravada, a lousa usa a fonte de giz.
+    m_glyphs.setRoot(HandwritingRecorder::defaultDatabasePath());
+    m_useHandwriting = m_titleBar->viewMenu()->addAction("Escrever com a minha letra");
+    m_useHandwriting->setCheckable(true);
+    m_useHandwriting->setChecked(true);
+    connect(m_useHandwriting, &QAction::toggled, this, &MainWindow::reloadHandwriting);
+    reloadHandwriting();
 
     // View: mostrar ou esconder o painel do professor (F8)
     m_showPanel = m_titleBar->viewMenu()->addAction("Painel do professor");
@@ -356,6 +371,19 @@ void MainWindow::newLesson()
     m_log->clear();
     QStringList errors;
     m_player.applyText(QString(), &errors);
+}
+
+void MainWindow::reloadHandwriting()
+{
+    if (!m_useHandwriting->isChecked()) {
+        m_player.setHandwriting(nullptr);
+        return;
+    }
+    if (QDir(m_glyphs.root()).exists())
+        m_glyphs.load();
+    for (const QString &warning : m_glyphs.warnings())
+        logLine("[escrita] " + warning);
+    m_player.setHandwriting(m_glyphs.variantCount() > 0 ? &m_glyphs : nullptr);
 }
 
 void MainWindow::logLine(const QString &text)

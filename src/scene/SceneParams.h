@@ -50,6 +50,10 @@ struct SceneParams {
     double tracking = -2.0;         // ajuste do espaço entre letras (unidades da fonte; < 0 aproxima)
     double cursiveTracking = 0.0;   // na cursiva as letras se emendam nos próprios limites
     double lineSpacing = 1.4;       // entrelinhamento, em alturas de letra
+    double handwritingSpacing = 0.12; // letras do banco de escrita manual: espaço entre elas, em alturas de letra
+    bool handwritingNormalize = true; // leva altura e linha de base de cada variante às proporções da fonte
+    double handwritingMinScale = 0.4; // limites desse ajuste (uma gravação muito fora não vira monstro)
+    double handwritingMaxScale = 2.5;
 
     // --- Objetos 3D (comando "objeto_3d") ---
     double cavalierAngle = 45.0;      // "cavaleira": ângulo do eixo da profundidade
@@ -71,4 +75,29 @@ struct SceneParams {
     double dimensionTextSize = 3.0;
     double dimensionTextGap = 0.8;    // folga entre a linha de cota e o texto
     double vanishingLimit = 3000.0;   // pontos de fuga além disso são descartados (retas paralelas)
+
+    // --- Gráficos (comando "grafico") ---
+    double chartWidth = 70.0;         // "largura" padrão da área do gráfico
+    double chartHeight = 42.0;        // "altura" padrão
+    double chartXMin = -5.0;          // "x" padrão
+    double chartXMax = 5.0;
+    int chartMaxFunctions = 4;
+    int chartSamples = 320;           // amostras por curva
+    double chartTickSpacing = 7.0;    // distância desejada entre marcações (números não se apertam)
+    double chartJump = 0.8;           // salto maior que esta fração da altura é assíntota
+    double chartAxisOverhang = 3.0;   // quanto a seta do eixo passa da área do gráfico
+    double chartTick = 1.0;           // comprimento das marcações
+    double chartTickTextSize = 2.2;
+    double chartTickTextGap = 0.8;
+    double chartLabelSize = 3.0;      // rótulos dos eixos, das curvas e dos pontos
+    double chartLabelGap = 1.0;
+    double chartPointRadius = 0.6;    // "pontos" destacados na curva
+
+    // --- Tabelas (comando "tabela") ---
+    double tableTextSize = 3.0;       // "tamanho" padrão
+    double tablePaddingX = 1.6;       // folga do texto até as linhas verticais
+    double tablePaddingY = 1.0;       // folga do texto até as linhas horizontais
+    double tableHeaderGap = 0.5;      // linha dupla sob o cabeçalho
+    int tableMaxRows = 20;
+    int tableMaxColumns = 8;
 };

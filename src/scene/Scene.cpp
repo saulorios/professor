@@ -1,4 +1,5 @@
 #include "Scene.h"
+#include "ChartGeometry.h"
 #include "JsonHelpers.h"
 
 #include <QDebug>
@@ -151,6 +152,10 @@ void Scene::execute(const QJsonObject &command)
         labelVertex(command);
     else if (type == "cotar")
         dimensionEdge(command);
+    else if (type == "grafico")
+        drawChart(command);
+    else if (type == "tabela")
+        drawTable(command);
     else if (type == "linha" || type == "coluna" || type == "nova_tela")
         flowCommand(command);
     else if (type == "apagar")
@@ -687,6 +692,304 @@ void Scene::dimensionEdge(const QJsonObject &command)
     reveal(element.bounds);
     m_waitingHand = true;
     m_hand.draw(strokes);
+}
+
+std::vector<HandStroke> Scene::label(const QString &text, double size, PressureLevel pressure, const QPointF &at,
+                                     int alignX, int alignY) const
+{
+    std::vector<HandStroke> strokes = writing(text, size, false, pressure, 0.0);
+    if (strokes.empty())
+        return strokes;
+    // alignX: −1 = borda esquerda em `at`, 0 = centro, 1 = borda direita;
+    // alignY: −1 = topo em `at`, 0 = centro, 1 = base
+    const QRectF box = Geometry2D::bounds(polylinesOf(strokes));
+    const double x = alignX < 0 ? box.left() : alignX > 0 ? box.right() : box.center().x();
+    const double y = alignY < 0 ? box.top() : alignY > 0 ? box.bottom() : box.center().y();
+    translate(strokes, at - QPointF(x, y));
+    return strokes;
+}
+
+void Scene::placeComposite(const QJsonObject &command, std::vector<HandStroke> strokes, const QString &description)
+{
+    // Um elemento só: a caixa inteira é obstáculo e as partes não colidem entre si
+    const QRectF local = Geometry2D::bounds(polylinesOf(strokes));
+    const Layout::Placement placement = m_layout.place(command, local, local.center(), m_elements);
+    if (placement.scale != 1.0)
+        scaleAbout(strokes, local.center(), placement.scale);
+    translate(strokes, placement.offset);
+
+    SceneElement element;
+    element.bounds = Geometry2D::bounds(polylinesOf(strokes));
+    element.anchor = element.bounds.center();
+    store(command, element, description);
+    reveal(element.bounds);
+    m_waitingHand = true;
+    m_hand.draw(strokes);
+}
+
+void Scene::drawChart(const QJsonObject &command)
+{
+    const PressureLevel pressure = pressureLevel(command);
+
+    // --- Funções: "expressao" (uma) ou "funcoes" (várias, com rótulo e estilo) ---
+    struct Function {
+        Expression expression;
+        QString text;
+        QString label;
+        LineStyle style = LineStyle::Solid;
+    };
+    std::vector<Function> functions;
+    QJsonArray list = command.value("funcoes").toArray();
+    if (list.isEmpty() && command.contains("expressao"))
+        list.append(QJsonObject{{"expressao", command.value("expressao")}, {"rotulo", command.value("rotulo")}});
+    for (const QJsonValue &value : list) {
+        const QJsonObject object = value.isString() ? QJsonObject{{"expressao", value}} : value.toObject();
+        Function function;
+        function.text = object.value("expressao").toString();
+        function.label = object.value("rotulo").toString();
+        const QString style = object.value("estilo").toString("solido");
+        function.style = style == "tracejado" ? LineStyle::Dashed : style == "pontilhado" ? LineStyle::Dotted
+                                                                                        : LineStyle::Solid;
+        QString error;
+        if (!function.expression.parse(function.text, &error))
+            return fail(QString("grafico: expressão \"%1\" inválida: %2").arg(function.text, error));
+        functions.push_back(std::move(function));
+        if (int(functions.size()) == m_params.chartMaxFunctions)
+            break;
+    }
+    const QJsonArray pointList = command.value("pontos").toArray();
+    if (functions.empty() && pointList.isEmpty())
+        return fail("grafico precisa de 'expressao', 'funcoes' ou 'pontos'");
+
+    // --- Faixas e tamanho ---
+    chart::Frame frame;
+    const auto readRange = [&command](const char *key, double *min, double *max) {
+        const QJsonArray range = command.value(key).toArray();
+        if (range.size() != 2 || !range[0].isDouble() || !range[1].isDouble())
+            return false;
+        *min = range[0].toDouble();
+        *max = range[1].toDouble();
+        return true;
+    };
+    frame.xMin = m_params.chartXMin;
+    frame.xMax = m_params.chartXMax;
+    if (command.contains("x") && (!readRange("x", &frame.xMin, &frame.xMax) || frame.xMax <= frame.xMin))
+        return fail("grafico: 'x' deve ser [minimo, maximo]");
+    std::vector<const Expression *> expressions;
+    for (const Function &function : functions)
+        expressions.push_back(&function.expression);
+    double width = m_params.chartWidth, height = m_params.chartHeight;
+    if ((command.contains("largura") && (!json::readNumber(command, "largura", &width) || width <= 0))
+        || (command.contains("altura") && (!json::readNumber(command, "altura", &height) || height <= 0)))
+        return fail("grafico: 'largura' e 'altura' devem ser números > 0");
+    frame.plot = QRectF(0.0, 0.0, width, height);
+    // Quantas marcações cabem sem os números se apertarem
+    const int xTicks = std::max(2, int(width / m_params.chartTickSpacing));
+    const int yTicks = std::max(2, int(height / m_params.chartTickSpacing));
+
+    if (command.contains("y")) {
+        if (!readRange("y", &frame.yMin, &frame.yMax) || frame.yMax <= frame.yMin)
+            return fail("grafico: 'y' deve ser [minimo, maximo]");
+    } else if (!expressions.empty()) {
+        if (!chart::autoRange(expressions, frame.xMin, frame.xMax, m_params.chartSamples, &frame.yMin, &frame.yMax))
+            return fail("grafico: as funções não têm valor definido nesse intervalo de x");
+    } else {
+        // Só pontos: a faixa de y vem deles
+        frame.yMin = 0.0;
+        frame.yMax = 0.0;
+        for (const QJsonValue &value : pointList) {
+            QPointF p;
+            if (json::readPoint(value.isObject() ? QJsonValue(QJsonArray{value.toObject().value("x"),
+                                                                           value.toObject().value("y")})
+                                                 : value, &p)) {
+                frame.yMin = std::min(frame.yMin, p.y());
+                frame.yMax = std::max(frame.yMax, p.y());
+            }
+        }
+        // O zero sempre entra; uma faixa de altura zero (todos em y = 0) ganha um passo
+        if (frame.yMax <= frame.yMin)
+            frame.yMax = frame.yMin + 1.0;
+        const double step = chart::niceStep(frame.yMin, frame.yMax, yTicks);
+        frame.yMin = std::floor(frame.yMin / step) * step;
+        frame.yMax = std::ceil(frame.yMax / step) * step;
+    }
+
+    std::vector<HandStroke> strokes;
+    const auto addLine = [&](const Polyline &line) { strokes.push_back({line, pressure, 1.0, 1.0, 0.0}); };
+    const auto addText = [&](const std::vector<HandStroke> &text) { strokes.insert(strokes.end(), text.begin(), text.end()); };
+
+    // --- Eixos: passam pelo zero quando ele está na faixa, senão pela borda ---
+    const double axisY = frame.map(0.0, std::clamp(0.0, frame.yMin, frame.yMax)).y();
+    const double axisX = frame.map(std::clamp(0.0, frame.xMin, frame.xMax), 0.0).x();
+    const QPointF xFrom(frame.plot.left(), axisY), xTo(frame.plot.right() + m_params.chartAxisOverhang, axisY);
+    const QPointF yFrom(axisX, frame.plot.bottom()), yTo(axisX, frame.plot.top() - m_params.chartAxisOverhang);
+    addLine(m_geometry.line(xFrom, xTo));
+    addLine(m_geometry.arrowHead(xFrom, xTo));
+    addLine(m_geometry.line(yFrom, yTo));
+    addLine(m_geometry.arrowHead(yFrom, yTo));
+
+    // --- Marcações e números (o zero do cruzamento dos eixos fica sem número) ---
+    const bool marks = command.value("marcas").toBool(true);
+    if (marks) {
+        const double tick = m_params.chartTick / 2.0;
+        const double xStep = chart::niceStep(frame.xMin, frame.xMax, xTicks);
+        for (double v : chart::ticks(frame.xMin, frame.xMax, xStep)) {
+            const double x = frame.map(v, 0.0).x();
+            if (std::abs(x - axisX) < 1e-6)
+                continue;
+            addLine(m_geometry.line({x, axisY - tick}, {x, axisY + tick}));
+            addText(label(chart::format(v, xStep), m_params.chartTickTextSize, pressure,
+                          {x, axisY + tick + m_params.chartTickTextGap}, 0, -1));
+        }
+        const double yStep = chart::niceStep(frame.yMin, frame.yMax, yTicks);
+        for (double v : chart::ticks(frame.yMin, frame.yMax, yStep)) {
+            const double y = frame.map(0.0, v).y();
+            if (std::abs(y - axisY) < 1e-6)
+                continue;
+            addLine(m_geometry.line({axisX - tick, y}, {axisX + tick, y}));
+            addText(label(chart::format(v, yStep), m_params.chartTickTextSize, pressure,
+                          {axisX - tick - m_params.chartTickTextGap, y}, 1, 0));
+        }
+    }
+
+    // --- Nomes dos eixos: depois da ponta de cada seta, longe dos números ---
+    addText(label(command.value("rotulo_x").toString("x"), m_params.chartLabelSize, pressure,
+                  xTo + QPointF(m_params.chartLabelGap, 0.0), -1, 0));
+    addText(label(command.value("rotulo_y").toString("y"), m_params.chartLabelSize, pressure,
+                  yTo - QPointF(0.0, m_params.chartLabelGap), 0, 1));
+
+    // Rótulos de curvas e pontos não caem um sobre o outro: sobem até achar lugar
+    std::vector<QRectF> taken;
+    const auto addFreeLabel = [&](const QString &text, const QPointF &at) {
+        std::vector<HandStroke> strokes = label(text, m_params.chartLabelSize, pressure, at, -1, 1);
+        if (strokes.empty())
+            return;
+        QRectF box = Geometry2D::bounds(polylinesOf(strokes));
+        const double step = box.height() + m_params.chartLabelGap / 2.0;
+        for (int attempt = 0; attempt < 6; ++attempt) {
+            const bool clash = std::any_of(taken.begin(), taken.end(),
+                                           [&box](const QRectF &other) { return other.intersects(box); });
+            if (!clash)
+                break;
+            translate(strokes, {0.0, -step});
+            box.translate(0.0, -step);
+        }
+        taken.push_back(box);
+        addText(strokes);
+    };
+
+    // --- Curvas, cada uma seguida do seu rótulo ---
+    for (const Function &function : functions) {
+        const std::vector<Polyline> pieces =
+            chart::sample(function.expression, frame, m_params.chartSamples, m_params.chartJump);
+        for (const Polyline &piece : m_geometry.styled(pieces, function.style))
+            addLine(piece);
+        if (!function.label.isEmpty() && !pieces.empty()) {
+            const QPointF end = pieces.back().back();
+            addFreeLabel(function.label, end + QPointF(m_params.chartLabelGap, -m_params.chartLabelGap));
+        }
+    }
+
+    // --- Pontos destacados: [x, y] ou {"x":..,"y":..,"rotulo":"P"} ---
+    for (const QJsonValue &value : pointList) {
+        const QJsonObject object = value.toObject();
+        QPointF p;
+        const QJsonValue coordinates = value.isObject() ? QJsonValue(QJsonArray{object.value("x"), object.value("y")})
+                                                        : value;
+        if (!json::readPoint(coordinates, &p))
+            return fail("grafico: cada ponto é [x, y] ou {\"x\":…,\"y\":…,\"rotulo\":…}");
+        if (p.x() < frame.xMin || p.x() > frame.xMax || p.y() < frame.yMin || p.y() > frame.yMax)
+            continue;
+        const QPointF at = frame.map(p.x(), p.y());
+        addLine(m_geometry.circle(at, m_params.chartPointRadius));
+        const QString text = object.value("rotulo").toString();
+        if (!text.isEmpty())
+            addFreeLabel(text, at + QPointF(m_params.chartLabelGap, -m_params.chartLabelGap));
+    }
+
+    placeComposite(command, std::move(strokes), "grafico");
+}
+
+void Scene::drawTable(const QJsonObject &command)
+{
+    const PressureLevel pressure = pressureLevel(command);
+    const QJsonArray rows = command.value("linhas").toArray();
+    if (rows.isEmpty())
+        return fail("tabela precisa de 'linhas': [[\"a\",\"b\"],[\"1\",\"2\"]]");
+    double size = m_params.tableTextSize;
+    if (command.contains("tamanho") && (!json::readNumber(command, "tamanho", &size) || size <= 0))
+        return fail("tabela: 'tamanho' deve ser um número > 0");
+    const bool header = command.value("cabecalho").toBool(true);
+
+    // Texto de cada célula já medido (números também valem)
+    const int rowCount = std::min(int(rows.size()), m_params.tableMaxRows);
+    int columnCount = 0;
+    std::vector<std::vector<std::vector<HandStroke>>> cells(rowCount);
+    for (int r = 0; r < rowCount; ++r) {
+        const QJsonArray row = rows[r].toArray();
+        const int columns = std::min(int(row.size()), m_params.tableMaxColumns);
+        columnCount = std::max(columnCount, columns);
+        cells[r].resize(columns);
+        for (int c = 0; c < columns; ++c) {
+            const QJsonValue value = row[c];
+            // Número vem como se escreve na lousa: vírgula decimal
+            const QString text = value.isDouble() ? QString::number(value.toDouble(), 'g', 10).replace('.', ',')
+                                                  : value.toString();
+            if (!text.trimmed().isEmpty())
+                cells[r][c] = writing(text, size, false, pressure, 0.0);
+        }
+    }
+    if (columnCount == 0)
+        return fail("tabela: as linhas estão vazias");
+    if (int(rows.size()) > m_params.tableMaxRows)
+        qWarning().noquote() << "tabela: só as primeiras" << m_params.tableMaxRows << "linhas foram desenhadas";
+
+    // Largura de cada coluna e altura de cada linha pelo maior texto
+    std::vector<double> columnWidth(columnCount, size);
+    std::vector<double> rowTop(rowCount, -size), rowBottom(rowCount, 0.0);
+    for (int r = 0; r < rowCount; ++r)
+        for (int c = 0; c < int(cells[r].size()); ++c) {
+            if (cells[r][c].empty())
+                continue;
+            const QRectF box = Geometry2D::bounds(polylinesOf(cells[r][c]));
+            columnWidth[c] = std::max(columnWidth[c], box.width());
+            rowTop[r] = std::min(rowTop[r], box.top());
+            rowBottom[r] = std::max(rowBottom[r], box.bottom());
+        }
+    std::vector<double> xs{0.0}, ys{0.0};
+    for (int c = 0; c < columnCount; ++c)
+        xs.push_back(xs.back() + columnWidth[c] + 2.0 * m_params.tablePaddingX);
+    for (int r = 0; r < rowCount; ++r)
+        ys.push_back(ys.back() + (rowBottom[r] - rowTop[r]) + 2.0 * m_params.tablePaddingY);
+    const double right = xs.back(), bottom = ys.back();
+
+    // Grade primeiro (contorno, colunas, linhas), depois o texto linha a linha
+    std::vector<HandStroke> strokes;
+    const auto addLine = [&](const Polyline &line) { strokes.push_back({line, pressure, 1.0, 1.0, 0.0}); };
+    addLine(m_geometry.rectangle({right / 2.0, bottom / 2.0}, right, bottom));
+    for (int c = 1; c < columnCount; ++c)
+        addLine(m_geometry.line({xs[c], 0.0}, {xs[c], bottom}));
+    for (int r = 1; r < rowCount; ++r) {
+        addLine(m_geometry.line({0.0, ys[r]}, {right, ys[r]}));
+        if (r == 1 && header)
+            addLine(m_geometry.line({0.0, ys[r] + m_params.tableHeaderGap}, {right, ys[r] + m_params.tableHeaderGap}));
+    }
+    for (int r = 0; r < rowCount; ++r) {
+        const double shift = (header && r > 0) ? m_params.tableHeaderGap / 2.0 : 0.0;
+        for (int c = 0; c < int(cells[r].size()); ++c) {
+            std::vector<HandStroke> &text = cells[r][c];
+            if (text.empty())
+                continue;
+            // Centralizado na coluna; todas as células da linha na mesma linha de base
+            const QRectF box = Geometry2D::bounds(polylinesOf(text));
+            const double x = (xs[c] + xs[c + 1]) / 2.0 - box.center().x();
+            const double y = ys[r] + m_params.tablePaddingY - rowTop[r] + shift;
+            translate(text, {x, y});
+            strokes.insert(strokes.end(), text.begin(), text.end());
+        }
+    }
+
+    placeComposite(command, std::move(strokes), "tabela");
 }
 
 const Object3DInfo *Scene::findObject(const QString &id) const

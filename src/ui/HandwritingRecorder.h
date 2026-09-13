@@ -37,6 +37,10 @@ public:
 
     static QString defaultDatabasePath();
 
+signals:
+    // Uma variante foi salva, excluída ou o banco foi recarregado do disco
+    void databaseChanged();
+
 protected:
     void showEvent(QShowEvent *event) override;
     void hideEvent(QHideEvent *event) override;

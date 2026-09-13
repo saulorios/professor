@@ -43,7 +43,8 @@ public:
 signals:
     void started();
     void chunk(const QByteArray &data); // pedaço de texto, cru
-    void finished();
+    // `reused`: o proxy devolveu uma aula já respondida antes (nenhum token gasto)
+    void finished(bool reused);
     void failed(const QString &message);
 
 private:

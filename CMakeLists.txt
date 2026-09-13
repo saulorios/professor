@@ -65,6 +65,10 @@ add_library(scene STATIC
     src/scene/SceneParams.h
     src/scene/Geometry2D.h
     src/scene/Geometry2D.cpp
+    src/scene/Expression.h
+    src/scene/Expression.cpp
+    src/scene/ChartGeometry.h
+    src/scene/ChartGeometry.cpp
     src/scene/HersheyFont.h
     src/scene/HersheyFont.cpp
     src/scene/Humanizer.h
@@ -89,7 +93,7 @@ add_library(scene STATIC
     src/scene/Scene.h
     src/scene/Scene.cpp
 )
-target_link_libraries(scene PUBLIC hand Qt6::Gui)
+target_link_libraries(scene PUBLIC hand handwriting Qt6::Gui)
 
 # handwriting/: banco de gestos de escrita manual (glifos capturados, strokes com
 # tempo) e o contrato da WritingTrajectory. Independente da lousa, do giz e da
@@ -164,4 +168,8 @@ if(LOUSA_BUILD_TESTS AND TARGET Qt6::Test)
     add_executable(handwriting_tests tests/handwriting/tst_handwriting.cpp)
     target_link_libraries(handwriting_tests PRIVATE handwriting Qt6::Test)
     add_test(NAME handwriting COMMAND handwriting_tests)
+
+    add_executable(scene_tests tests/scene/tst_scene.cpp resources/resources.qrc)
+    target_link_libraries(scene_tests PRIVATE scene Qt6::Test)
+    add_test(NAME scene COMMAND scene_tests)
 endif()

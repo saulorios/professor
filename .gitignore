@@ -9,3 +9,4 @@ CMakeLists.txt.user*
 proxy/__pycache__/
 proxy/.venv/
 proxy/.env
+proxy/cache_aulas/
