@@ -54,8 +54,8 @@ QMenuBar::item:pressed {
 TitleBarButton {
     background: transparent;
     border: none;
-    qproperty-iconColor: #4F4F4F;
-    qproperty-iconHoverColor: #858585;
+    qproperty-iconColor: #CCCCCC;
+    qproperty-iconHoverColor: #FFFFFF;
     qproperty-hoverColor: #2A2A2A;   /* círculo de hover, igual nos três botões */
 }
 

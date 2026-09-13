@@ -61,8 +61,8 @@ private:
     int m_iconStroke;
     int m_restoreOffset;
     double m_closeStroke;
-    QColor m_iconColor = QColor(0x4F, 0x4F, 0x4F);
-    QColor m_iconHoverColor = QColor(0x85, 0x85, 0x85);
+    QColor m_iconColor = QColor(0xCC, 0xCC, 0xCC);
+    QColor m_iconHoverColor = QColor(0xFF, 0xFF, 0xFF);
     QColor m_hoverColor = QColor(0x2A, 0x2A, 0x2A);
 };
 
