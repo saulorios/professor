@@ -122,6 +122,8 @@ add_library(protocol STATIC
     src/protocol/CommandQueue.cpp
     src/protocol/AiClient.h
     src/protocol/AiClient.cpp
+    src/protocol/ProxyLauncher.h
+    src/protocol/ProxyLauncher.cpp
 )
 target_link_libraries(protocol PUBLIC scene Qt6::Network)
 

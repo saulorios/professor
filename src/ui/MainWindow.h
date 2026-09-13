@@ -4,6 +4,7 @@
 #include "LessonRecorder.h"
 #include "physics/Board.h"
 #include "protocol/AiClient.h"
+#include "protocol/ProxyLauncher.h"
 
 #include <QMainWindow>
 #include <QSize>
@@ -74,6 +75,7 @@ private:
     LessonPlayer m_player;
     LessonRecorder m_recorder;
     AiClient m_ai;
+    ProxyLauncher m_proxy;   // sobe o proxy Python junto com o app
     TitleBar *m_titleBar = nullptr;
     AgentPanel *m_agent = nullptr;
     QSplitter *m_splitter = nullptr;

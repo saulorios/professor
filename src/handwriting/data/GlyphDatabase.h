@@ -47,6 +47,10 @@ public:
     // do banco), ou nullptr com `error`.
     const GlyphVariant *addVariant(GlyphVariant variant, QString *error = nullptr);
 
+    // Apaga a variante do disco e do banco. As outras ficam intactas; se era a
+    // de maior número, esse número volta a ser o próximo livre.
+    bool removeVariant(const QString &character, const QString &variantId, QString *error = nullptr);
+
     static QString characterKey(const QString &character);   // "0041", "0065_0301"
     static QString variantLabel(const QString &character);   // "A", "a", "U00E1"
     QString variantPath(const QString &character, const QString &variantId) const;

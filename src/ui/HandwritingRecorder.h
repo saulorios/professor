@@ -11,6 +11,7 @@ class QLabel;
 class QLineEdit;
 class QListWidget;
 class QPlainTextEdit;
+class QPushButton;
 
 // Parâmetros da janela do gravador
 struct HandwritingRecorderParams {
@@ -24,7 +25,8 @@ struct HandwritingRecorderParams {
 // Gravador de escrita manual (F7): escolhe o caractere, escreve a letra com
 // mouse, caneta ou toque, desfaz/limpa e salva como variante nova (A01, A02...).
 // A lista mostra as variantes do caractere; clicar numa carrega e mostra os
-// strokes, a ordem e as medidas. O banco fica em <pasta do executável>/handwriting
+// strokes, a ordem e as medidas; "Excluir variante" apaga a selecionada
+// (com confirmação). O banco fica em <pasta do executável>/handwriting
 // ou na pasta da variável LOUSA_ESCRITA.
 class HandwritingRecorder : public QWidget
 {
@@ -46,6 +48,8 @@ private:
     void refreshDetails();
     void saveVariant();
     void loadSelectedVariant();
+    void deleteSelectedVariant();
+    void updateButtons();
     QString currentCharacter() const;
     QString describe(const handwriting::GlyphVariant &variant) const;
 
@@ -59,5 +63,6 @@ private:
     QCheckBox *m_showTrajectory = nullptr;
     QCheckBox *m_showPoints = nullptr;
     QLabel *m_status = nullptr;
+    QPushButton *m_delete = nullptr;
     bool m_previousCompression = true;   // estado do atributo antes de abrir a janela
 };

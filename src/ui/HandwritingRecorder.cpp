@@ -11,6 +11,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QShortcut>
@@ -70,6 +71,9 @@ HandwritingRecorder::HandwritingRecorder(QWidget *parent)
     side->addWidget(new QLabel("Variantes salvas", this));
     m_variants = new QListWidget(this);
     side->addWidget(m_variants, 1);
+    m_delete = new QPushButton("Excluir variante", this);
+    m_delete->setToolTip("Apaga do disco a variante selecionada na lista");
+    side->addWidget(m_delete);
     side->addWidget(new QLabel("Detalhes", this));
     m_details = new QPlainTextEdit(this);
     m_details->setReadOnly(true);
@@ -125,10 +129,12 @@ HandwritingRecorder::HandwritingRecorder(QWidget *parent)
     connect(m_showPoints, &QCheckBox::toggled, m_capture, &HandwritingCapture::setShowPoints);
     connect(m_capture, &HandwritingCapture::strokesChanged, this, &HandwritingRecorder::refreshDetails);
     connect(m_capture, &HandwritingCapture::captureStarted, this, [this] {
-        m_variants->clearSelection();
+        m_variants->setCurrentItem(nullptr);
         refreshDetails();
     });
     connect(m_variants, &QListWidget::itemClicked, this, &HandwritingRecorder::loadSelectedVariant);
+    connect(m_variants, &QListWidget::itemSelectionChanged, this, &HandwritingRecorder::updateButtons);
+    connect(m_delete, &QPushButton::clicked, this, &HandwritingRecorder::deleteSelectedVariant);
 
     auto *undoKey = new QShortcut(QKeySequence::Undo, this);
     connect(undoKey, &QShortcut::activated, m_capture, &HandwritingCapture::undo);
@@ -206,6 +212,7 @@ void HandwritingRecorder::refreshVariants()
             item->setData(Qt::UserRole, v.variantId);
         }
     }
+    updateButtons();
     refreshDetails();
 }
 
@@ -216,6 +223,37 @@ void HandwritingRecorder::loadSelectedVariant()
         return;
     if (const GlyphVariant *v = m_database.variant(currentCharacter(), item->data(Qt::UserRole).toString()))
         m_capture->showVariant(*v);
+}
+
+void HandwritingRecorder::deleteSelectedVariant()
+{
+    const QListWidgetItem *item = m_variants->currentItem();
+    if (!item || !item->isSelected())
+        return;
+    const QString character = currentCharacter();
+    const QString id = item->data(Qt::UserRole).toString();
+    const auto answer = QMessageBox::question(
+        this, "Excluir variante",
+        QString("Apagar a variante %1 do banco?\n\n%2\n\nIsto não pode ser desfeito.")
+            .arg(id, m_database.variantPath(character, id)),
+        QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+    if (answer != QMessageBox::Yes)
+        return;
+
+    QString error;
+    if (!m_database.removeVariant(character, id, &error)) {
+        m_status->setText(QString("Não foi possível excluir %1: %2").arg(id, error));
+        return;
+    }
+    m_status->setText(QString("%1 excluída").arg(id));
+    m_capture->clear();
+    refreshVariants();
+}
+
+void HandwritingRecorder::updateButtons()
+{
+    const QListWidgetItem *item = m_variants->currentItem();
+    m_delete->setEnabled(item && item->isSelected());
 }
 
 void HandwritingRecorder::refreshDetails()

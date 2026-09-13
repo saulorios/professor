@@ -379,6 +379,15 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
   acompanhamento, tem tempo limite por inatividade (`idleTimeoutMs`), trata erro
   de rede e `stop()` cancela o reply em andamento. Endereço do proxy em
   `AiClientParams::url`, sobreposto pela variável `LOUSA_PROXY`.
+- `protocol/ProxyLauncher`: ao abrir o app, se a URL da IA é local e o
+  `/saude` não responde, sobe `python -m uvicorn servidor:app` na pasta
+  `proxy/` (achada subindo a partir do executável, ou `LOUSA_PROXY_DIR`), com o
+  Python do `.venv` se existir. Espera o `/saude` responder, manda a saída do
+  uvicorn para o Log e o estado para o painel. Ao fechar, `terminate()` e, se
+  preciso, `kill()`; no Linux `PR_SET_PDEATHSIG` encerra o proxy até se o app
+  for morto. Proxy já rodando (terminal) é usado e não é encerrado; porta
+  ocupada por outro serviço vira erro. `LOUSA_PROXY_AUTO=0` desliga.
+  Constantes em `ProxyLauncherParams`. A chave continua só no proxy.
 - `ui/AgentPanel`: painel lateral direito (largura 320, splitter, F8 ou
   View > "Painel do professor"). Cabeçalho "Professor" com nova aula (+),
   histórico e fechar; no meio a **timeline**, um cartão por pergunta com o
@@ -476,6 +485,8 @@ pulso, IK e variação **não** existem ainda. O Hershey continua sendo a fonte 
   (formato em `docs/handwriting-format.md`). `data/GlyphDatabase`: pasta por
   código Unicode, ids `A01`, `a01`, `U00E701`; o próximo número olha memória e
   disco, e a gravação usa abertura exclusiva (nunca sobrescreve).
+  `removeVariant` apaga o arquivo e tira do banco (a pasta vazia sai junto);
+  se era a de maior número, o número volta a ficar livre.
 - `recorder/StrokeRecorder`: pointerDown/Move/Up → strokes, desfazer, limpar,
   `build()` da variante. `engine/HandwritingEngine`: `appendGlyph` com
   `GlyphPlacement` (escala, rotação, baseline, velocidade, pressão — sem tocar
@@ -486,7 +497,8 @@ pulso, IK e variação **não** existem ainda. O Hershey continua sendo a fonte 
   do caractere e atalhos A E I O U M N R S, área com guias
   (`ui/HandwritingCapture`: mouse, caneta com pressão/inclinação e toque, com o
   timestamp do evento), Limpar (Delete), Desfazer (Ctrl+Z), Salvar variante
-  (Ctrl+S), "Mostrar trajetória" (número, cor e seta por stroke, giz levantado
+  (Ctrl+S), "Excluir variante" (a selecionada na lista, com confirmação),
+  "Mostrar trajetória" (número, cor e seta por stroke, giz levantado
   pontilhado) e "Mostrar pontos"; lista das variantes (clicar carrega) e
   detalhes com caixa, timestamps, ordem e pen up/down. Enquanto a janela está
   aberta a compressão de eventos do mouse fica desligada. Banco em
@@ -522,7 +534,9 @@ cmake --build build -j
 Sem `CMAKE_BUILD_TYPE`, o CMake já usa Release (a física roda por pixel).
 Os testes (se o Qt6::Test estiver instalado) rodam com `ctest --test-dir build`.
 
-Para a aula com IA, rode antes o proxy (a chave fica só nele):
+Para a aula com IA, o proxy precisa estar instalado (a chave fica só nele). A
+lousa o inicia sozinha ao abrir e o encerra ao fechar; rodá-lo à mão continua
+valendo:
 
 ```bash
 cd proxy

@@ -24,6 +24,11 @@ unidos por `_` na pasta (`0065_0301`). Cada variante nova recebe o próximo
 número livre, olhando a memória **e** a pasta, e é gravada com abertura
 exclusiva: um arquivo existente nunca é sobrescrito.
 
+Excluir uma variante (botão "Excluir variante" no gravador, ou
+`GlyphDatabase::removeVariant`) apaga só o arquivo dela; a pasta sai junto se
+ficar vazia. Os números das outras não mudam; se a excluída era a de maior
+número, a próxima gravação volta a usá-lo.
+
 ## Espaço do glifo
 
 - 1 unidade = altura da guia de captura (linha de base → linha das maiúsculas).

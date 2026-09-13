@@ -57,6 +57,20 @@ export LOUSA_MODELO=nvidia/nemotron-3-ultra-550b-a55b:free
 
 ## Rodar
 
+**O aplicativo sobe o proxy sozinho.** Ao abrir a lousa, se o endereço da IA
+for local e nada estiver respondendo em `/saude`, ela executa
+`.venv/bin/python -m uvicorn servidor:app` nesta pasta, mostra a saída no Log
+(botão "Log" do painel do professor) e encerra o servidor ao fechar. Se você já
+rodou o proxy no terminal, a lousa usa esse e não o encerra.
+
+- A pasta é procurada a partir do executável, subindo até achar `proxy/`
+  (`build/` fica ao lado dela); `LOUSA_PROXY_DIR` indica outra.
+- Sem `.venv`, usa `python3`/`python` do sistema (precisa das dependências).
+- `LOUSA_PROXY_AUTO=0` desliga o início automático.
+- No Linux, se a lousa for morta sem fechar, o proxy morre junto.
+
+Para rodar à mão:
+
 ```bash
 .venv/bin/uvicorn servidor:app --port 8000
 ```

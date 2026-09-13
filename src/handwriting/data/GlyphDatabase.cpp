@@ -4,6 +4,7 @@
 #include "GlyphSerializer.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 
 #include <algorithm>
@@ -176,6 +177,33 @@ const GlyphVariant *GlyphDatabase::addVariant(GlyphVariant variant, QString *err
             break;   // erro de disco, não colisão
     }
     return fail(reason);
+}
+
+bool GlyphDatabase::removeVariant(const QString &character, const QString &variantId, QString *error)
+{
+    const auto fail = [error](const QString &message) {
+        if (error)
+            *error = message;
+        return false;
+    };
+    const auto it = m_glyphs.find(character);
+    if (it == m_glyphs.end())
+        return fail(QString("variante %1 não encontrada").arg(variantId));
+    std::vector<GlyphVariant> &variants = it->second.variants;
+    const auto found = std::find_if(variants.begin(), variants.end(),
+                                    [&variantId](const GlyphVariant &v) { return v.variantId == variantId; });
+    if (found == variants.end())
+        return fail(QString("variante %1 não encontrada").arg(variantId));
+
+    QFile file(variantPath(character, variantId));
+    if (file.exists() && !file.remove())
+        return fail(file.errorString());
+    variants.erase(found);
+    if (variants.empty()) {
+        m_glyphs.erase(it);
+        QDir(m_root).rmdir(characterKey(character));   // só sai se ficou vazia
+    }
+    return true;
 }
 
 void GlyphDatabase::insert(GlyphVariant variant)

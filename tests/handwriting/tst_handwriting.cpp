@@ -81,6 +81,7 @@ private slots:
     void databaseNeverOverwrites();
     void differentCapturesProduceDifferentVariants();
     void databaseLoadsFromDisk();
+    void removeVariant();
     void charactersWithAccentsAndCase();
     void rejectsUnsupportedSchema();
     void trajectoryFromVariant();
@@ -390,6 +391,47 @@ void HandwritingTest::databaseLoadsFromDisk()
     QCOMPARE(db.glyph("A")->variants[1].variantId, QString("A02"));
     QCOMPARE(db.warnings().size(), 1);   // o arquivo inválido é pulado com aviso
     QCOMPARE(db.glyph("A")->variants[1].strokes.size(), std::size_t(3));
+}
+
+void HandwritingTest::removeVariant()
+{
+    QTemporaryDir dir;
+    GlyphDatabase db(dir.path());
+    StrokeRecorder rec;
+    writeA(rec);
+    for (int i = 0; i < 3; ++i)
+        QVERIFY(db.addVariant(rec.build("A", "")));
+    QVERIFY(db.addVariant(rec.build("O", "")));
+
+    // Do meio: some do disco e da memória, as outras ficam, o número não volta
+    QString error;
+    QVERIFY2(db.removeVariant("A", "A02", &error), qPrintable(error));
+    QVERIFY(!QFile::exists(dir.filePath("0041/A02.json")));
+    QVERIFY(QFile::exists(dir.filePath("0041/A01.json")));
+    QVERIFY(QFile::exists(dir.filePath("0041/A03.json")));
+    QVERIFY(!db.variant("A", "A02"));
+    QCOMPARE(db.glyph("A")->variants.size(), std::size_t(2));
+    QCOMPARE(db.nextVariantId("A"), QString("A04"));
+
+    // A de maior número: o número fica livre de novo
+    QVERIFY(db.removeVariant("A", "A03"));
+    QCOMPARE(db.nextVariantId("A"), QString("A02"));
+
+    // Inexistentes: erro, nada muda
+    QVERIFY(!db.removeVariant("A", "A09", &error));
+    QVERIFY(error.contains("A09"));
+    QVERIFY(!db.removeVariant("Z", "Z01"));
+    QCOMPARE(db.variantCount(), 2);
+
+    // Última variante do caractere: o glifo e a pasta vazia somem
+    QVERIFY(db.removeVariant("O", "O01"));
+    QVERIFY(!db.glyph("O"));
+    QVERIFY(!QDir(dir.filePath("004F")).exists());
+
+    GlyphDatabase reloaded(dir.path());
+    QVERIFY(reloaded.load());
+    QCOMPARE(reloaded.characters(), QStringList({"A"}));
+    QCOMPARE(reloaded.variantCount(), 1);
 }
 
 void HandwritingTest::charactersWithAccentsAndCase()

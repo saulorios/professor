@@ -21,6 +21,8 @@
 #include <QPlainTextEdit>
 #include <QShortcut>
 #include <QSplitter>
+#include <QTimer>
+#include <QUrl>
 #include <QVBoxLayout>
 #include <QWindow>
 
@@ -263,6 +265,16 @@ MainWindow::MainWindow(QWidget *parent)
     // A legenda ocupa a faixa que a cena reserva para ela na base da lousa
     const SceneParams &scene = m_player.scene().params();
     m_canvas->setCaptionBand(scene.captionBandHeight * m_board.params().boardWidth / scene.boardWidth);
+
+    // Proxy da IA: sobe junto com o app (se o endereço for local e ele ainda não
+    // estiver rodando) e é encerrado ao sair. A saída do uvicorn vai para o Log.
+    connect(&m_proxy, &ProxyLauncher::output, this, [this](const QString &line) { logLine("[proxy] " + line); });
+    connect(&m_proxy, &ProxyLauncher::statusChanged, this, [this](const QString &text) {
+        logLine("[proxy] " + text);
+        if (!m_ai.isBusy())
+            m_agent->setStatus(text);
+    });
+    QTimer::singleShot(0, this, [this] { m_proxy.start(QUrl(m_ai.params().url)); });
 
     setWindowTitle("Lousa Inteligente");
 
