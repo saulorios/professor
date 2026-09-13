@@ -13,9 +13,12 @@ class QMenuBar;
 struct TitleBarParams {
     int height = 35;          // altura útil da topbar
     int separatorHeight = 1;  // linha separadora (border-bottom no QSS)
-    int buttonWidth = 42;     // área de clique dos botões minimizar / maximizar / fechar
-    int iconSize = 11;        // lado dos ícones dos botões
-    int hoverSize = 24;       // diâmetro do círculo de hover (menor que a área de clique)
+    int buttonWidth = 32;     // área de clique dos botões minimizar / maximizar / fechar
+    int iconSize = 10;        // lado da caixa dos ícones
+    int iconStroke = 2;       // espessura das retas dos ícones
+    int restoreOffset = 3;    // deslocamento da janela de trás no ícone restaurar
+    double closeStroke = 2.0; // espessura das diagonais do fechar (suavizadas)
+    int hoverSize = 28;       // diâmetro do círculo de hover (menor que a área de clique)
     int logoSize = 16;
     int leftMargin = 10;      // espaço antes do logo
     int logoSpacing = 6;      // espaço entre o logo e o menu
@@ -55,9 +58,12 @@ private:
     Kind m_kind;
     int m_iconSize;
     int m_hoverSize;
-    QColor m_iconColor = QColor(0xCC, 0xCC, 0xCC);
-    QColor m_iconHoverColor = QColor(0xFF, 0xFF, 0xFF);
-    QColor m_hoverColor = QColor(0x2A, 0x2D, 0x2E);
+    int m_iconStroke;
+    int m_restoreOffset;
+    double m_closeStroke;
+    QColor m_iconColor = QColor(0x4F, 0x4F, 0x4F);
+    QColor m_iconHoverColor = QColor(0x85, 0x85, 0x85);
+    QColor m_hoverColor = QColor(0x2A, 0x2A, 0x2A);
 };
 
 // Barra de título customizada: logo + menu à esquerda, título ao centro

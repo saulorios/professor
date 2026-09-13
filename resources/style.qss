@@ -54,15 +54,9 @@ QMenuBar::item:pressed {
 TitleBarButton {
     background: transparent;
     border: none;
-    qproperty-iconColor: #CCCCCC;
-    qproperty-iconHoverColor: #FFFFFF;
-    qproperty-hoverColor: #2A2D2E;   /* círculo de hover, desenhado pelo botão */
-}
-
-/* Fechar: círculo vermelho com ícone branco */
-TitleBarButton#CloseButton {
-    qproperty-iconHoverColor: #FFFFFF;
-    qproperty-hoverColor: #E81123;
+    qproperty-iconColor: #4F4F4F;
+    qproperty-iconHoverColor: #858585;
+    qproperty-hoverColor: #2A2A2A;   /* círculo de hover, igual nos três botões */
 }
 
 /* Menus abertos a partir da topbar */

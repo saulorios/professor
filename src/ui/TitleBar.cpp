@@ -17,6 +17,9 @@ TitleBarButton::TitleBarButton(Kind kind, const TitleBarParams &params, QWidget 
     , m_kind(kind)
     , m_iconSize(params.iconSize)
     , m_hoverSize(params.hoverSize)
+    , m_iconStroke(params.iconStroke)
+    , m_restoreOffset(params.restoreOffset)
+    , m_closeStroke(params.closeStroke)
 {
     setFixedSize(params.buttonWidth, params.height);
     setFocusPolicy(Qt::NoFocus);
@@ -50,66 +53,69 @@ void TitleBarButton::setHoverColor(const QColor &color)
 
 void TitleBarButton::paintEvent(QPaintEvent *event)
 {
-    // Fundo normal (transparente) vindo do QSS; o QSS não tem mais :hover
+    // Fundo normal (transparente) vindo do QSS; o QSS não tem :hover
     QPushButton::paintEvent(event);
 
     QPainter painter(this);
+    const bool hovered = underMouse();
 
-    // Hover circular, do mesmo tamanho qualquer que seja a área de clique
-    if (underMouse()) {
-        const QRectF hoverRect((width() - m_hoverSize) / 2.0, (height() - m_hoverSize) / 2.0, m_hoverSize,
-                               m_hoverSize);
-        painter.setRenderHint(QPainter::Antialiasing);
+    // Hover: círculo centralizado, com borda nítida (sem antialiasing), igual
+    // para os três botões. A área de clique continua sendo o botão inteiro.
+    if (hovered) {
+        const int d = m_hoverSize;
         painter.setPen(Qt::NoPen);
         painter.setBrush(m_hoverColor);
-        painter.drawEllipse(hoverRect);
-        // Linhas retas de 1 px ficam nítidas sem antialiasing
-        painter.setRenderHint(QPainter::Antialiasing, false);
+        painter.drawEllipse(QRect((width() - d) / 2, (height() - d) / 2, d, d));
     }
 
-    QPen pen(underMouse() ? m_iconHoverColor : m_iconColor);
-    pen.setWidthF(1.0);
-    painter.setPen(pen);
-    painter.setBrush(Qt::NoBrush);
-
-    // Área do ícone, centralizada no botão
+    // Ícone numa caixa s × s, alinhada ao pixel e centralizada no botão.
+    // Retas são retângulos cheios de `t` px (nítidos em qualquer tema).
+    const QColor color = hovered ? m_iconHoverColor : m_iconColor;
     const int s = m_iconSize;
+    const int t = m_iconStroke;
     const int x = (width() - s) / 2;
     const int y = (height() - s) / 2;
 
     switch (m_kind) {
     case Kind::Minimize:
-        painter.drawLine(x, y + s / 2, x + s - 1, y + s / 2);
+        // Barra na base da caixa
+        painter.fillRect(QRect(x, y + s - t, s, t), color);
         break;
 
     case Kind::Maximize:
-        painter.drawRect(x, y, s - 1, s - 1);
+        painter.fillRect(QRect(x, y, s, t), color);
+        painter.fillRect(QRect(x, y + s - t, s, t), color);
+        painter.fillRect(QRect(x, y, t, s), color);
+        painter.fillRect(QRect(x + s - t, y, t, s), color);
         break;
 
     case Kind::Restore: {
-        // const int d = 2; // deslocamento da janela de trás
-        // // Janela da frente
-        // painter.drawRect(x, y + d, s - 1 - d, s - 1 - d);
-        // // Janela de trás (apenas as partes não cobertas pela da frente)
-        // painter.drawLine(x + d, y, x + s - 1, y);
-        // painter.drawLine(x + s - 1, y, x + s - 1, y + s - 1 - d);
-        // painter.drawLine(x + d, y, x + d, y + d - 1);
-        // painter.drawLine(x + s - d, y + s - 1 - d, x + s - 1, y + s - 1 - d);
-        const int offset = 3;
-        const int rectSize = s - offset;
-        // Janela de trás (deslocada para cima e direita)
-        painter.drawRect(x + offset, y, rectSize - 1, rectSize - 1);
-        // Janela da frente (deslocada para baixo e esquerda)
-        painter.fillRect(QRect(x, y + offset, rectSize, rectSize), Qt::transparent);
-        painter.drawRect(x, y + offset, rectSize - 1, rectSize - 1);
+        // Janela de trás: quadrado completo no canto superior direito
+        const int back = s - m_restoreOffset;
+        const int bx = x + m_restoreOffset;
+        painter.fillRect(QRect(bx, y, back, t), color);
+        painter.fillRect(QRect(bx, y + back - t, back, t), color);
+        painter.fillRect(QRect(bx, y, t, back), color);
+        painter.fillRect(QRect(bx + back - t, y, t, back), color);
+        // Janela da frente: só o "L" (lado esquerdo e base) que sobra por fora
+        const int front = s - t;
+        const int fy = y + t;
+        painter.fillRect(QRect(x, fy, t, front), color);
+        painter.fillRect(QRect(x, fy + front - t, front, t), color);
         break;
     }
 
-    case Kind::Close:
+    case Kind::Close: {
+        // Diagonais suavizadas, dos centros dos pixels dos cantos
         painter.setRenderHint(QPainter::Antialiasing);
-        painter.drawLine(QPointF(x, y), QPointF(x + s, y + s));
-        painter.drawLine(QPointF(x + s, y), QPointF(x, y + s));
+        QPen pen(color, m_closeStroke, Qt::SolidLine, Qt::FlatCap);
+        painter.setPen(pen);
+        const double a = 0.5;
+        const double b = s - 0.5;
+        painter.drawLine(QPointF(x + a, y + a), QPointF(x + b, y + b));
+        painter.drawLine(QPointF(x + b, y + a), QPointF(x + a, y + b));
         break;
+    }
     }
 }
 
