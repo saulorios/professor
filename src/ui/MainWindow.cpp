@@ -163,13 +163,27 @@ MainWindow::MainWindow(QWidget *parent)
         m_canvas->followTo(range);
         m_canvas->flashArea(range);
     });
-    connect(&m_ai, &AiClient::started, this, [this] { m_agent->setBusy(true); });
+    connect(&m_ai, &AiClient::started, this, [this] {
+        m_streamError.clear();
+        m_agent->setBusy(true);
+    });
     connect(&m_ai, &AiClient::chunk, &m_player, &LessonPlayer::appendStreamData);
     connect(&m_ai, &AiClient::finished, this, [this] {
         m_agent->setBusy(false);
-        m_agent->setStatus(m_streamCommands > 0 ? QString() : "A IA não enviou nenhum comando.");
-        m_agent->finishSegment(TimelineCard::State::Done);
+        if (!m_streamError.isEmpty()) {
+            // A resposta começou, mas o modelo falhou no caminho (o motivo veio no fluxo)
+            m_agent->setStatus(m_streamError);
+            m_agent->finishSegment(TimelineCard::State::Failed);
+        } else {
+            m_agent->setStatus(m_streamCommands > 0 ? QString() : "A IA não enviou nenhum comando.");
+            m_agent->finishSegment(TimelineCard::State::Done);
+        }
         m_player.finishStream();
+    });
+    connect(&m_player, &LessonPlayer::streamError, this, [this](const QString &message) {
+        m_streamError = message;
+        m_agent->setStatus(message);
+        logLine("erro: " + message);
     });
     connect(&m_ai, &AiClient::failed, this, [this](const QString &message) {
         m_agent->setBusy(false);

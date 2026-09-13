@@ -87,6 +87,7 @@ private:
     QAction *m_showPanel = nullptr;
     double m_answerTop = 0.0;   // topo, em px do canvas, da resposta em andamento
     int m_streamCommands = 0; // comandos recebidos na resposta atual
+    QString m_streamError;    // erro relatado pelo proxy no meio da resposta atual
     QWidget *m_body = nullptr;
     BoardCanvas *m_canvas = nullptr;
     TuningPanel *m_tuningPanel = nullptr;

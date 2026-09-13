@@ -369,6 +369,16 @@ AskBar (pergunta) → AiClient → proxy/ (guarda a chave) → API da Anthropic
   `choices[0].delta.content`. Sem `LOUSA_PROVEDOR`, vale `openrouter` se houver
   `OPENROUTER_API_KEY`, senão `anthropic`. Outras variáveis: `LOUSA_MODELO`
   (obrigatória fora da Anthropic), `LOUSA_MAX_TOKENS`, `LOUSA_TEMPO_LIMITE`.
+- Modelos que "pensam" antes de escrever (raciocínio no `delta.reasoning`) e
+  provedores gratuitos sobrecarregados: a resposta HTTP do proxy só começa
+  quando o modelo dá sinal de trabalho (texto ou raciocínio). Erro do provedor
+  antes disso vira 502 e ficar `LOUSA_ESPERA_SEM_ATIVIDADE` (45 s) sem texto nem
+  raciocínio vira 504 — os "aguarde" do OpenRouter não contam. Enquanto o
+  modelo pensa, o proxy manda uma linha vazia a cada 10 s (o parser ignora) para
+  o app não desistir aos 60 s. Erro depois de começar vira a linha interna
+  `{"tipo":"erro","mensagem":...}`: a `LessonPlayer` emite `streamError`, o
+  painel mostra o motivo e o cartão fica com erro; ela não entra na aula nem no
+  histórico da conversa.
 - Modelos menores nem sempre obedecem ao protocolo: linhas que não são JSON
   válido já eram ignoradas com aviso, e o `CommandParser` também descarta as
   cercas ```` ```json ```` que eles costumam pôr em volta da resposta.

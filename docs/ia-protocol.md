@@ -201,6 +201,14 @@ Marca onde uma pergunta do aluno começou, para o painel do professor reconstrui
 a timeline ao reabrir a aula. Não desenha nada.
 **Uso interno. A IA NÃO deve gerar este comando.**
 
+```
+{"tipo":"erro","mensagem":"o modelo falhou: ..."}
+```
+Acrescentado pelo proxy quando a resposta já começou e o modelo falha no meio
+do caminho. O aplicativo mostra a mensagem no painel; não entra na aula nem no
+histórico da conversa.
+**Uso interno. A IA NÃO deve gerar este comando.**
+
 ### Apagar
 
 ```

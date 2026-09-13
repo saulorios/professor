@@ -68,6 +68,8 @@ signals:
     void commandReceived(const QJsonObject &command); // para o log da aula
     void stepFinished();               // a IA terminou um passo e espera
     void question(const QString &text); // "pergunta" de uma aula gravada
+    // Linha {"tipo":"erro"} vinda do proxy no meio da resposta: não entra na aula
+    void streamError(const QString &message);
     void chalkMoved(const ChalkPose &pose); // giz visível na tela
     void chalkHidden();
     void canvasResized();                          // a lousa cresceu (ou voltou a uma tela)

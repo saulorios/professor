@@ -104,9 +104,17 @@ void AiClient::replyFinished()
     m_reply = nullptr;
     reply->deleteLater();
 
-    // O que chegou até aqui já faz parte da conversa
-    if (!m_answer.trimmed().isEmpty())
-        m_history.push_back({"professor", m_answer});
+    // O que chegou até aqui já faz parte da conversa, menos as linhas de erro
+    // que o proxy acrescenta (não foram ditas pela IA)
+    QStringList said;
+    for (const QString &line : m_answer.split('\n')) {
+        const QJsonObject object = QJsonDocument::fromJson(line.trimmed().toUtf8()).object();
+        if (object.value("tipo").toString() != "erro")
+            said << line;
+    }
+    const QString answer = said.join('\n');
+    if (!answer.trimmed().isEmpty())
+        m_history.push_back({"professor", answer});
 
     const QNetworkReply::NetworkError error = reply->error();
     if (m_aborted || error == QNetworkReply::NoError) {

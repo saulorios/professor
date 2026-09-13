@@ -17,6 +17,11 @@ LessonPlayer::LessonPlayer(Board &board, QObject *parent)
     , m_queue(m_scene)
 {
     connect(&m_parser, &CommandParser::commandParsed, this, [this](const QJsonObject &command) {
+        // Erro relatado pelo proxy: é aviso para a interface, não comando da aula
+        if (command.value("tipo").toString() == "erro") {
+            emit streamError(command.value("mensagem").toString());
+            return;
+        }
         m_commands.append(command);
         emit commandReceived(command);
         if (!m_streaming)

@@ -78,6 +78,16 @@ Para rodar à mão:
 Confira com `curl http://127.0.0.1:8000/saude`: ele mostra o provedor, o modelo
 e se a chave foi encontrada.
 
+## Quando a IA não responde
+
+Os modelos gratuitos às vezes ficam sobrecarregados: o OpenRouter aceita o
+pedido e fica só mandando "aguarde". O proxy desiste depois de
+`LOUSA_ESPERA_SEM_ATIVIDADE` segundos (padrão 45) sem o modelo escrever nem
+pensar, e o painel do professor mostra o motivo — normalmente a solução é
+tentar de novo ou trocar `LOUSA_MODELO`. Modelos que "pensam" antes de
+escrever podem levar mais de um minuto até o primeiro comando: enquanto
+pensam, o proxy mantém o aplicativo esperando.
+
 ## API
 
 `POST /aula`

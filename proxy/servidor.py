@@ -18,9 +18,11 @@ Como rodar:
     .venv/bin/uvicorn servidor:app --port 8000
 """
 
+import asyncio
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import AsyncIterator
 
@@ -51,6 +53,13 @@ carregar_env(PASTA / ".env")
 PROTOCOLO = PASTA.parent / "docs" / "ia-protocol.md"
 MAX_TOKENS = int(os.environ.get("LOUSA_MAX_TOKENS", "4000"))
 TEMPO_LIMITE = float(os.environ.get("LOUSA_TEMPO_LIMITE", "300"))
+# Quanto tempo o modelo pode ficar sem escrever NEM pensar antes de o proxy
+# desistir com um erro claro. Os "aguarde" do OpenRouter não contam: um provedor
+# sobrecarregado manda só isso. Fica abaixo dos 60 s sem dados que o app tolera.
+ESPERA_SEM_ATIVIDADE = float(os.environ.get("LOUSA_ESPERA_SEM_ATIVIDADE", "45"))
+# Enquanto o modelo pensa, uma linha vazia a cada tanto mantém o app esperando
+# (o parser do app ignora linhas vazias)
+SINAL_DE_VIDA = 10.0
 
 # Sem LOUSA_PROVEDOR, vale o provedor cuja chave estiver definida
 PADRAO = "openrouter" if os.environ.get("OPENROUTER_API_KEY") else "anthropic"
@@ -113,8 +122,67 @@ async def abrir_anthropic(mensagens: list[dict]) -> AsyncIterator[str]:
     return gerar()
 
 
+def ler_evento_sse(linha: str) -> tuple[str, str] | None:
+    """Uma linha SSE no formato OpenAI → ("texto" | "pensando" | "erro" | "fim", valor) ou None.
+
+    Comentários (": OPENROUTER PROCESSING") e pedaços vazios viram None. O
+    raciocínio dos modelos que "pensam" antes de escrever vira "pensando": não
+    vai para o app, mas mostra que o modelo está trabalhando.
+    """
+    if not linha.startswith("data:"):
+        return None
+    dado = linha[5:].strip()
+    if dado == "[DONE]":
+        return ("fim", "")
+    try:
+        objeto = json.loads(dado)
+    except json.JSONDecodeError:
+        return None
+    if erro := objeto.get("error"):
+        mensagem = erro.get("message", erro) if isinstance(erro, dict) else erro
+        return ("erro", str(mensagem))
+    escolhas = objeto.get("choices") or []
+    delta = (escolhas[0].get("delta") or {}) if escolhas else {}
+    if texto := delta.get("content"):
+        return ("texto", texto)
+    if delta.get("reasoning") or delta.get("reasoning_content") or delta.get("reasoning_details"):
+        return ("pensando", "")
+    return None
+
+
+async def eventos_sse(linhas: AsyncIterator[str]) -> AsyncIterator[tuple[str, str]]:
+    """Eventos úteis do fluxo. TimeoutError se passar ESPERA_SEM_ATIVIDADE sem texto nem raciocínio."""
+    ultima_atividade = time.monotonic()
+    while True:
+        restante = ESPERA_SEM_ATIVIDADE - (time.monotonic() - ultima_atividade)
+        if restante <= 0:
+            raise asyncio.TimeoutError
+        try:
+            linha = await asyncio.wait_for(linhas.__anext__(), restante)
+        except StopAsyncIteration:
+            return
+        evento = ler_evento_sse(linha)
+        if evento is None:
+            continue
+        if evento[0] in ("texto", "pensando"):
+            ultima_atividade = time.monotonic()
+        yield evento
+
+
+def linha_de_erro(mensagem: str) -> str:
+    """Erro dentro de uma resposta já começada: uma linha do protocolo que o app
+    mostra no painel (uso interno; ver docs/ia-protocol.md)."""
+    return json.dumps({"tipo": "erro", "mensagem": mensagem}, ensure_ascii=False) + "\n"
+
+
 async def abrir_openai(mensagens: list[dict]) -> AsyncIterator[str]:
-    """Streaming no formato OpenAI (SSE), usado pelo OpenRouter e compatíveis."""
+    """Streaming no formato OpenAI (SSE), usado pelo OpenRouter e compatíveis.
+
+    A resposta HTTP só começa quando o modelo dá sinal de trabalho (texto ou
+    raciocínio). Antes disso, erro do provedor (sobrecarga, limite do plano
+    gratuito) ou silêncio longo viram HTTP 502/504 com o motivo. Depois, um
+    erro vira uma linha {"tipo":"erro"} no próprio fluxo.
+    """
     cabecalhos = {"Content-Type": "application/json", "X-Title": "Lousa Inteligente"}
     if CHAVE:
         cabecalhos["Authorization"] = f"Bearer {CHAVE}"
@@ -133,28 +201,64 @@ async def abrir_openai(mensagens: list[dict]) -> AsyncIterator[str]:
         await contexto.__aexit__(None, None, None)
         raise HTTPException(status_code=502, detail=f"a API respondeu {resposta.status_code}: {detalhe}")
 
+    eventos = eventos_sse(resposta.aiter_lines())
+    dica = "Tente de novo ou troque LOUSA_MODELO."
+    try:
+        primeiro = await eventos.__anext__()
+    except (asyncio.TimeoutError, StopAsyncIteration, httpx.HTTPError) as erro:
+        await contexto.__aexit__(None, None, None)
+        if isinstance(erro, asyncio.TimeoutError):
+            raise HTTPException(status_code=504, detail=f"o modelo {MODELO} não começou a responder em "
+                                                        f"{ESPERA_SEM_ATIVIDADE:.0f} s (provedor sobrecarregado?). "
+                                                        f"{dica}") from erro
+        if isinstance(erro, StopAsyncIteration):
+            raise HTTPException(status_code=502, detail=f"o modelo {MODELO} fechou a conexão sem responder. "
+                                                        f"{dica}") from erro
+        raise HTTPException(status_code=502, detail=f"{type(erro).__name__}: {erro}") from erro
+    if primeiro[0] in ("erro", "fim"):
+        await contexto.__aexit__(None, None, None)
+        motivo = f"falhou: {primeiro[1]}" if primeiro[0] == "erro" else "terminou sem responder"
+        raise HTTPException(status_code=502, detail=f"o modelo {MODELO} {motivo}. {dica}")
+
     async def gerar():
+        respondeu = False
+        meio_de_linha = False     # o último texto não terminou em \n: nada de linha vazia agora
+        ultimo_envio = -SINAL_DE_VIDA
+        falhou = False
+
+        def erro_no_fluxo(mensagem: str) -> str:
+            print(f"erro no meio da resposta: {mensagem}", file=sys.stderr, flush=True)
+            return ("\n" if meio_de_linha else "") + linha_de_erro(f"o modelo {MODELO} {mensagem}. {dica}")
+
+        async def todos():
+            yield primeiro
+            async for evento in eventos:
+                yield evento
+
         try:
-            async for linha in resposta.aiter_lines():
-                # SSE: linhas "data: {...}", comentários com ":" e um "[DONE]" no fim
-                if not linha.startswith("data:"):
-                    continue
-                dado = linha[5:].strip()
-                if dado == "[DONE]":
+            async for tipo, valor in todos():
+                agora = time.monotonic()
+                if tipo == "texto":
+                    respondeu = True
+                    meio_de_linha = not valor.endswith("\n")
+                    ultimo_envio = agora
+                    yield valor
+                elif tipo == "pensando":
+                    if not meio_de_linha and agora - ultimo_envio >= SINAL_DE_VIDA:
+                        ultimo_envio = agora
+                        yield "\n"
+                elif tipo == "erro":
+                    falhou = True
+                    yield erro_no_fluxo(f"falhou: {valor}")
                     break
-                try:
-                    objeto = json.loads(dado)
-                except json.JSONDecodeError:
-                    continue
-                if erro := objeto.get("error"):
-                    print(f"erro no meio da resposta: {erro}", file=sys.stderr, flush=True)
+                else:
                     break
-                escolhas = objeto.get("choices") or []
-                texto = (escolhas[0].get("delta") or {}).get("content") if escolhas else None
-                if texto:
-                    yield texto
-        except Exception as erro:  # noqa: BLE001 - o cabeçalho já foi enviado; só dá para registrar
-            print(f"erro no meio da resposta: {erro}", file=sys.stderr, flush=True)
+            if not respondeu and not falhou:
+                yield erro_no_fluxo("pensou, mas terminou sem responder")
+        except asyncio.TimeoutError:
+            yield erro_no_fluxo(f"parou de responder por {ESPERA_SEM_ATIVIDADE:.0f} s")
+        except Exception as erro:  # noqa: BLE001 - o cabeçalho já foi enviado: o erro vai no fluxo
+            yield erro_no_fluxo(f"falhou: {type(erro).__name__}: {erro}")
         finally:
             await contexto.__aexit__(None, None, None)
 
