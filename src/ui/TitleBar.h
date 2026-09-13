@@ -8,6 +8,7 @@
 class QLabel;
 class QMenu;
 class QMenuBar;
+class QSvgWidget;
 
 // Parâmetros ajustáveis da TitleBar (em pixels)
 struct TitleBarParams {
@@ -97,7 +98,7 @@ private:
 
     TitleBarParams m_params;
 
-    QLabel *m_logo = nullptr;
+    QSvgWidget *m_logo = nullptr;
     QMenuBar *m_menuBar = nullptr;
     QMenu *m_fileMenu = nullptr;
     QMenu *m_viewMenu = nullptr;

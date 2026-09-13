@@ -15,12 +15,6 @@ TitleBar {
     border-bottom: 1px solid #2B2B2B;
 }
 
-/* Logo (placeholder 16x16) */
-#Logo {
-    background-color: #0078D4;
-    border-radius: 3px;
-}
-
 /* Título centralizado */
 #TitleLabel {
     background: transparent;

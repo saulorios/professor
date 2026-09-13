@@ -14,7 +14,7 @@ endif()
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Widgets SvgWidgets)
 find_package(Qt6 OPTIONAL_COMPONENTS Test)
 
 option(LOUSA_BUILD_TESTS "Compila os testes (precisa do Qt6::Test)" ON)
@@ -156,7 +156,7 @@ add_executable(lousa
     resources/resources.qrc
 )
 
-target_link_libraries(lousa PRIVATE protocol handwriting Qt6::Widgets)
+target_link_libraries(lousa PRIVATE protocol handwriting Qt6::Widgets Qt6::SvgWidgets)
 
 # Testes (ctest --test-dir build)
 if(LOUSA_BUILD_TESTS AND TARGET Qt6::Test)

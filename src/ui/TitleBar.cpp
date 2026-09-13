@@ -6,6 +6,8 @@
 #include <QMenuBar>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QSvgRenderer>
+#include <QSvgWidget>
 #include <QWindow>
 
 // ---------------------------------------------------------------------------
@@ -130,9 +132,10 @@ TitleBar::TitleBar(QWidget *parent)
     setAttribute(Qt::WA_StyledBackground);
     setFixedHeight(m_params.height + m_params.separatorHeight);
 
-    // Logo: placeholder estilizado no QSS
-    m_logo = new QLabel(this);
+    // Logo vetorial (nítido em qualquer escala de tela), sem distorcer a proporção
+    m_logo = new QSvgWidget(":/images/logobrain.svg", this);
     m_logo->setObjectName("Logo");
+    m_logo->renderer()->setAspectRatioMode(Qt::KeepAspectRatio);
     m_logo->setFixedSize(m_params.logoSize, m_params.logoSize);
     m_logo->setAttribute(Qt::WA_TransparentForMouseEvents);
 
